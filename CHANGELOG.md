@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/joshrotenberg/cheer/compare/v0.1.1...v0.1.2) (2026-04-04)
+
+
+### Features
+
+* add OptionParser compatibility features ([#5](https://github.com/joshrotenberg/cheer/issues/5)) ([a2d1121](https://github.com/joshrotenberg/cheer/commit/a2d11218fb6d8beca178d92db8e179b77ca726e3))
+
 ## [0.1.1](https://github.com/joshrotenberg/cheer/compare/v0.1.0...v0.1.1) (2026-04-04)
 
 
