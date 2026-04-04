@@ -124,6 +124,30 @@ Cheer.tree(MyApp.CLI.Root)
 # %{name: "my-app", subcommands: [%{name: "greet", ...}, ...]}
 ```
 
+## Examples
+
+The `examples/` directory contains standalone Mix projects you can run and experiment with:
+
+- **[greeter](examples/greeter/)** -- Minimal single-command CLI. Demonstrates arguments, typed options, validation, defaults, and environment variable fallback.
+
+  ```sh
+  cd examples/greeter
+  mix deps.get
+  mix run -e 'Greeter.CLI.main(["world", "--loud", "--times", "3"])'
+  # HELLO, WORLD!
+  # HELLO, WORLD!
+  # HELLO, WORLD!
+  ```
+
+- **[devtool](examples/devtool/)** -- Nested multi-command CLI (`devtool server start`, `devtool db migrate`, etc.). Demonstrates subcommand trees, persistent lifecycle hooks, mutually exclusive param groups, and cross-param validation.
+
+  ```sh
+  cd examples/devtool
+  mix deps.get
+  mix run -e 'Devtool.CLI.main(["server", "start", "--port", "8080", "--https"])'
+  # Starting server at https://localhost:8080
+  ```
+
 ## Installation
 
 ```elixir
