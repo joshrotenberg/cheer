@@ -1,8 +1,24 @@
 defmodule Cheer.Router do
   @moduledoc """
   Routes argv through the command tree and dispatches to the matched command.
+
+  Handles the full dispatch pipeline: subcommand matching, option parsing
+  (via `OptionParser`), default/env-var application, validation (required
+  fields, choices, custom validators, cross-param validators, groups), and
+  lifecycle hook execution.
+
+  This module is called internally by `Cheer.run/3` and is not typically
+  invoked directly.
   """
 
+  @doc """
+  Dispatch `argv` through the command tree rooted at `command`.
+
+  Options:
+
+    * `:prog` - program name for help/usage output
+    * `:parent_hooks` - (internal) accumulated persistent hooks from parent commands
+  """
   @spec dispatch(module(), [String.t()], keyword()) :: term()
   def dispatch(command, argv, opts \\ []) do
     parent_hooks = Keyword.get(opts, :parent_hooks, [])

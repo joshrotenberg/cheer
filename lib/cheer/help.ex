@@ -1,6 +1,12 @@
 defmodule Cheer.Help do
   @moduledoc """
   Auto-generates help text from command metadata.
+
+  Renders a formatted help page to stdout including usage line, description,
+  subcommands, arguments, options (with defaults, env vars, choices), param
+  groups, and built-in flags (`--help`, `--version`).
+
+  Called automatically when `--help` or `-h` is passed to any command.
   """
 
   @doc """
