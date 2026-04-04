@@ -4,6 +4,16 @@ defmodule Cheer.Command.DSL do
   lifecycle hooks, param groups, and validation.
   """
 
+  @doc """
+  Define a command block with the given `name`.
+
+  All DSL calls (`about`, `argument`, `option`, `subcommand`, etc.) go inside the block.
+
+      command "deploy" do
+        about "Deploy the app"
+        option :env, type: :string, required: true
+      end
+  """
   defmacro command(name, do: block) do
     quote do
       @cheer_command_name unquote(name)
@@ -11,10 +21,25 @@ defmodule Cheer.Command.DSL do
     end
   end
 
+  @doc "Set the command's description text, shown in help output."
   defmacro about(text), do: quote(do: @cheer_about(unquote(text)))
+
+  @doc "Set the command's version string, printed by `--version` / `-V`."
   defmacro version(text), do: quote(do: @cheer_version(unquote(text)))
+
+  @doc "Register a child subcommand module."
   defmacro subcommand(module), do: quote(do: @cheer_subcommands(unquote(module)))
 
+  @doc """
+  Declare a positional argument.
+
+  Arguments are matched in declaration order. Options:
+
+    * `:type` - `:string` (default), `:integer`, `:float`, or `:boolean`
+    * `:required` - `true` or `false` (default)
+    * `:help` - help text shown in `--help`
+    * `:validate` - `fn value -> :ok | {:error, msg} end`
+  """
   defmacro argument(name, opts \\ []) do
     {validate_ast, clean_opts} = Keyword.pop(opts, :validate)
 
@@ -33,6 +58,20 @@ defmodule Cheer.Command.DSL do
     end
   end
 
+  @doc """
+  Declare a named option (flag).
+
+  Options:
+
+    * `:type` - `:string` (default), `:integer`, `:float`, or `:boolean`
+    * `:short` - single-character alias atom (e.g. `:p` for `-p`)
+    * `:required` - `true` or `false` (default)
+    * `:default` - default value when not provided
+    * `:env` - environment variable name to read as fallback
+    * `:choices` - list of allowed values
+    * `:help` - help text shown in `--help`
+    * `:validate` - `fn value -> :ok | {:error, msg} end`
+  """
   defmacro option(name, opts \\ []) do
     {validate_ast, clean_opts} = Keyword.pop(opts, :validate)
 

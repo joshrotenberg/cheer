@@ -23,3 +23,8 @@ erl_crash.dump
 cheer-*.tar
 
 CLAUDE.md
+
+# Example project build artifacts
+examples/*/_build/
+examples/*/deps/
+examples/*/mix.lock
