@@ -163,6 +163,7 @@ defmodule Cheer.Completion do
 
   defp option_completions({name, opts}) do
     flags = ["--#{name}"]
+    flags = if Keyword.get(opts, :type) == :boolean, do: flags ++ ["--no-#{name}"], else: flags
     short = Keyword.get(opts, :short)
     if short, do: flags ++ ["-#{short}"], else: flags
   end
