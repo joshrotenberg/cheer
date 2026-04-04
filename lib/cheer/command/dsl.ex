@@ -63,14 +63,19 @@ defmodule Cheer.Command.DSL do
 
   Options:
 
-    * `:type` - `:string` (default), `:integer`, `:float`, or `:boolean`
+    * `:type` - `:string` (default), `:integer`, `:float`, `:boolean`, or `:count`
     * `:short` - single-character alias atom (e.g. `:p` for `-p`)
     * `:required` - `true` or `false` (default)
-    * `:default` - default value when not provided
+    * `:default` - default value when not provided (`:count` defaults to `0`, `:multi` defaults to `[]`)
+    * `:multi` - `true` to allow repeated flags collected into a list (e.g. `--tag a --tag b`)
     * `:env` - environment variable name to read as fallback
     * `:choices` - list of allowed values
     * `:help` - help text shown in `--help`
     * `:validate` - `fn value -> :ok | {:error, msg} end`
+
+  Boolean options automatically support `--no-<name>` negation (e.g. `--no-color`).
+
+  Extra positional arguments after `--` are collected into `args[:rest]`.
   """
   defmacro option(name, opts \\ []) do
     {validate_ast, clean_opts} = Keyword.pop(opts, :validate)

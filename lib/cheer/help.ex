@@ -63,6 +63,11 @@ defmodule Cheer.Help do
 
         help = Keyword.get(opt_opts, :help, "")
 
+        type = Keyword.get(opt_opts, :type, :string)
+
+        flag_name =
+          if type == :boolean, do: "[no-]#{name}", else: to_string(name)
+
         suffixes =
           []
           |> maybe_append(Keyword.get(opt_opts, :choices), fn choices ->
@@ -75,9 +80,17 @@ defmodule Cheer.Help do
             "[env: #{env}]"
           end)
 
+        suffixes =
+          if type == :count, do: suffixes ++ ["(repeatable)"], else: suffixes
+
+        suffixes =
+          if Keyword.get(opt_opts, :multi, false),
+            do: suffixes ++ ["(multiple)"],
+            else: suffixes
+
         suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
 
-        IO.puts("  #{short}--#{String.pad_trailing(to_string(name), 16)} #{help}#{suffix}")
+        IO.puts("  #{short}--#{String.pad_trailing(flag_name, 16)} #{help}#{suffix}")
       end
 
       IO.puts("")
@@ -129,6 +142,7 @@ defmodule Cheer.Help do
         end)
 
     parts = if meta.options != [], do: parts ++ ["[OPTIONS]"], else: parts
+    parts = if meta.subcommands == [], do: parts ++ ["[-- <args>...]"], else: parts
 
     Enum.join(parts, " ")
   end

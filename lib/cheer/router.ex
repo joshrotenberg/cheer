@@ -100,17 +100,22 @@ defmodule Cheer.Router do
     else
       args = apply_defaults(meta.options)
       args = apply_env_vars(args, meta.options)
-      args = Map.merge(args, Map.new(parsed))
+      args = Map.merge(args, build_parsed_map(parsed, meta.options))
+
+      {declared_positional, rest_args} = Enum.split(positional, length(meta.arguments))
 
       args =
         meta.arguments
-        |> Enum.zip(positional)
+        |> Enum.zip(declared_positional)
         |> Enum.reduce(args, fn {{name, arg_opts}, value}, acc ->
           Map.put(acc, name, coerce_arg(value, arg_opts))
         end)
 
+      args = Map.put(args, :rest, rest_args)
+
       missing =
-        missing_required(meta.arguments, args) ++ missing_required(meta.options, args)
+        missing_required(meta.arguments, args) ++
+          missing_required_options(meta.options, args)
 
       cond do
         missing != [] ->
@@ -135,6 +140,19 @@ defmodule Cheer.Router do
     params
     |> Enum.filter(fn {_name, o} -> Keyword.get(o, :required, false) end)
     |> Enum.reject(fn {name, _o} -> Map.has_key?(args, name) end)
+    |> Enum.map(fn {name, _o} -> name end)
+  end
+
+  defp missing_required_options(options, args) do
+    options
+    |> Enum.filter(fn {_name, o} -> Keyword.get(o, :required, false) end)
+    |> Enum.reject(fn {name, o} ->
+      case Map.fetch(args, name) do
+        {:ok, []} -> not Keyword.get(o, :multi, false)
+        {:ok, _} -> true
+        :error -> false
+      end
+    end)
     |> Enum.map(fn {name, _o} -> name end)
   end
 
@@ -165,10 +183,20 @@ defmodule Cheer.Router do
   # -- Defaults --
 
   defp apply_defaults(options) do
-    options
-    |> Enum.filter(fn {_name, opts} -> Keyword.has_key?(opts, :default) end)
-    |> Enum.reduce(%{}, fn {name, opts}, acc ->
-      Map.put(acc, name, Keyword.fetch!(opts, :default))
+    Enum.reduce(options, %{}, fn {name, opts}, acc ->
+      cond do
+        Keyword.has_key?(opts, :default) ->
+          Map.put(acc, name, Keyword.fetch!(opts, :default))
+
+        Keyword.get(opts, :type) == :count ->
+          Map.put(acc, name, 0)
+
+        Keyword.get(opts, :multi, false) ->
+          Map.put(acc, name, [])
+
+        true ->
+          acc
+      end
     end)
   end
 
@@ -310,7 +338,13 @@ defmodule Cheer.Router do
   defp build_option_parser_spec(options) do
     spec =
       Enum.map(options, fn {name, opts} ->
-        {name, Keyword.get(opts, :type, :string)}
+        type = Keyword.get(opts, :type, :string)
+
+        if Keyword.get(opts, :multi, false) do
+          {name, [type, :keep]}
+        else
+          {name, type}
+        end
       end)
 
     aliases =
@@ -319,6 +353,19 @@ defmodule Cheer.Router do
       |> Enum.map(fn {name, opts} -> {Keyword.fetch!(opts, :short), name} end)
 
     {spec, aliases}
+  end
+
+  defp build_parsed_map(parsed, options) do
+    multi_names =
+      for {name, opts} <- options, Keyword.get(opts, :multi, false), into: MapSet.new(), do: name
+
+    Enum.reduce(parsed, %{}, fn {key, value}, acc ->
+      if MapSet.member?(multi_names, key) do
+        Map.update(acc, key, [value], &(&1 ++ [value]))
+      else
+        Map.put(acc, key, value)
+      end
+    end)
   end
 
   # -- Output helpers --

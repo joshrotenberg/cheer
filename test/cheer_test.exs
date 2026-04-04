@@ -677,7 +677,7 @@ defmodule CheerTest do
   describe "Cheer.Test" do
     test "captures output and return value" do
       result = Cheer.Test.run(TestGreet, ["hello"])
-      assert result.return == {:ok, %{name: "hello"}}
+      assert result.return == {:ok, %{name: "hello", rest: []}}
       assert result.output == ""
     end
 
@@ -767,6 +767,170 @@ defmodule CheerTest do
       assert length(tree.subcommands) == 2
       names = Enum.map(tree.subcommands, & &1.name) |> Enum.sort()
       assert names == ["greet", "serve"]
+    end
+  end
+
+  # -- :count type ----------------------------------------------------------
+
+  defmodule TestCount do
+    use Cheer.Command
+
+    command "verbose" do
+      about("Test count")
+
+      option(:verbose, type: :count, short: :v, help: "Increase verbosity")
+      argument(:name, type: :string, required: true, help: "Name")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "count type" do
+    test "single flag" do
+      assert {:ok, args} = Cheer.run(TestCount, ["hello", "-v"])
+      assert args[:verbose] == 1
+    end
+
+    test "repeated flags" do
+      assert {:ok, args} = Cheer.run(TestCount, ["hello", "-v", "-v", "-v"])
+      assert args[:verbose] == 3
+    end
+
+    test "combined short flags" do
+      assert {:ok, args} = Cheer.run(TestCount, ["hello", "-vvv"])
+      assert args[:verbose] == 3
+    end
+
+    test "defaults to 0 when not provided" do
+      assert {:ok, args} = Cheer.run(TestCount, ["hello"])
+      assert args[:verbose] == 0
+    end
+
+    test "help text shows repeatable" do
+      output = capture_io(fn -> Cheer.run(TestCount, ["--help"]) end)
+      assert output =~ "(repeatable)"
+    end
+  end
+
+  # -- Multi-value options ---------------------------------------------------
+
+  defmodule TestMultiValue do
+    use Cheer.Command
+
+    command "multi" do
+      about("Test multi-value")
+
+      option(:tag, type: :string, multi: true, short: :t, help: "Tags")
+      option(:port, type: :integer, multi: true, help: "Ports")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestMultiRequired do
+    use Cheer.Command
+
+    command "multi-req" do
+      about("Test multi required")
+
+      option(:tag, type: :string, multi: true, required: true, help: "Tags")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "multi-value options" do
+    test "collects repeated flags into a list" do
+      assert {:ok, args} = Cheer.run(TestMultiValue, ["--tag", "a", "--tag", "b"])
+      assert args[:tag] == ["a", "b"]
+    end
+
+    test "single value is still a list" do
+      assert {:ok, args} = Cheer.run(TestMultiValue, ["--tag", "solo"])
+      assert args[:tag] == ["solo"]
+    end
+
+    test "defaults to empty list" do
+      assert {:ok, args} = Cheer.run(TestMultiValue, [])
+      assert args[:tag] == []
+      assert args[:port] == []
+    end
+
+    test "works with short flags" do
+      assert {:ok, args} = Cheer.run(TestMultiValue, ["-t", "x", "-t", "y"])
+      assert args[:tag] == ["x", "y"]
+    end
+
+    test "works with integer type" do
+      assert {:ok, args} = Cheer.run(TestMultiValue, ["--port", "80", "--port", "443"])
+      assert args[:port] == [80, 443]
+    end
+
+    test "required multi rejects empty" do
+      output = capture_io(fn -> Cheer.run(TestMultiRequired, []) end)
+      assert output =~ "missing required"
+    end
+
+    test "required multi accepts values" do
+      assert {:ok, args} = Cheer.run(TestMultiRequired, ["--tag", "a"])
+      assert args[:tag] == ["a"]
+    end
+
+    test "help text shows multiple" do
+      output = capture_io(fn -> Cheer.run(TestMultiValue, ["--help"]) end)
+      assert output =~ "(multiple)"
+    end
+  end
+
+  # -- Boolean negation (--no-*) ---------------------------------------------
+
+  describe "boolean negation" do
+    test "--no-loud sets boolean to false" do
+      assert {:ok, args} = Cheer.run(TestGreet, ["hello", "--no-loud"])
+      assert args[:loud] == false
+    end
+
+    test "--no-verbose sets boolean to false" do
+      assert {:ok, args} = Cheer.run(TestDefaults, ["--no-verbose"])
+      assert args[:verbose] == false
+    end
+
+    test "help text shows [no-] for boolean options" do
+      output = capture_io(fn -> Cheer.run(TestGreet, ["--help"]) end)
+      assert output =~ "--[no-]loud"
+    end
+
+    test "completion includes --no- variants for booleans" do
+      script = Cheer.Completion.generate(TestDefaults, :bash, prog: "serve")
+      assert script =~ "--no-verbose"
+    end
+  end
+
+  # -- Double-dash separator -------------------------------------------------
+
+  describe "-- separator" do
+    test "extra args after -- are collected in :rest" do
+      assert {:ok, args} = Cheer.run(TestGreet, ["world", "--", "--not-a-flag", "extra"])
+      assert args[:name] == "world"
+      assert args[:rest] == ["--not-a-flag", "extra"]
+    end
+
+    test "no separator gives empty rest" do
+      assert {:ok, args} = Cheer.run(TestGreet, ["world"])
+      assert args[:rest] == []
+    end
+
+    test "separator with no extra args gives empty rest" do
+      assert {:ok, args} = Cheer.run(TestGreet, ["world", "--"])
+      assert args[:rest] == []
+    end
+
+    test "help usage line shows [-- <args>...]" do
+      output = capture_io(fn -> Cheer.run(TestGreet, ["--help"]) end)
+      assert output =~ "[-- <args>...]"
     end
   end
 end
