@@ -1,0 +1,131 @@
+defmodule Cheer.Command.DSL do
+  @moduledoc """
+  Macros for declaring commands, arguments, options, subcommands,
+  lifecycle hooks, param groups, and validation.
+  """
+
+  defmacro command(name, do: block) do
+    quote do
+      @cheer_command_name unquote(name)
+      unquote(block)
+    end
+  end
+
+  defmacro about(text), do: quote(do: @cheer_about(unquote(text)))
+  defmacro version(text), do: quote(do: @cheer_version(unquote(text)))
+  defmacro subcommand(module), do: quote(do: @cheer_subcommands(unquote(module)))
+
+  defmacro argument(name, opts \\ []) do
+    {validate_ast, clean_opts} = Keyword.pop(opts, :validate)
+
+    if validate_ast do
+      fname = :"__cheer_validate_#{name}__"
+
+      quote do
+        @cheer_arguments {unquote(name), unquote(Macro.escape(clean_opts))}
+        @cheer_has_validate unquote(name)
+        def unquote(fname)(val), do: unquote(validate_ast).(val)
+      end
+    else
+      quote do
+        @cheer_arguments {unquote(name), unquote(Macro.escape(clean_opts))}
+      end
+    end
+  end
+
+  defmacro option(name, opts \\ []) do
+    {validate_ast, clean_opts} = Keyword.pop(opts, :validate)
+
+    base =
+      if validate_ast do
+        fname = :"__cheer_validate_#{name}__"
+
+        quote do
+          @cheer_options {unquote(name), unquote(Macro.escape(clean_opts))}
+          @cheer_has_validate unquote(name)
+          def unquote(fname)(val), do: unquote(validate_ast).(val)
+        end
+      else
+        quote do
+          @cheer_options {unquote(name), unquote(Macro.escape(clean_opts))}
+        end
+      end
+
+    quote do
+      unquote(base)
+
+      # If inside a group block, register this option in the group
+      if @cheer_current_group do
+        {group_name, group_opts} = @cheer_current_group
+        @cheer_groups {group_name, group_opts, unquote(name)}
+      end
+    end
+  end
+
+  @doc "Cross-parameter validation function. Receives args map, returns `:ok` or `{:error, msg}`."
+  defmacro validate(fun) do
+    quote do
+      count = Module.get_attribute(__MODULE__, :cheer_validator_count)
+      Module.put_attribute(__MODULE__, :cheer_validator_count, count + 1)
+
+      def __cheer_cross_validate__(unquote(Macro.var(:count, __MODULE__)), args) do
+        unquote(fun).(args)
+      end
+    end
+  end
+
+  # -- Lifecycle hooks --
+
+  @doc "Run a function on args before `run/2`. Receives and returns args map."
+  defmacro before_run(fun) do
+    quote do
+      count = Module.get_attribute(__MODULE__, :cheer_before_run_count)
+      Module.put_attribute(__MODULE__, :cheer_before_run_count, count + 1)
+
+      def __cheer_before_run__(unquote(Macro.var(:count, __MODULE__)), args) do
+        unquote(fun).(args)
+      end
+    end
+  end
+
+  @doc "Run a function on the result after `run/2`. Receives and returns result."
+  defmacro after_run(fun) do
+    quote do
+      count = Module.get_attribute(__MODULE__, :cheer_after_run_count)
+      Module.put_attribute(__MODULE__, :cheer_after_run_count, count + 1)
+
+      def __cheer_after_run__(unquote(Macro.var(:count, __MODULE__)), result) do
+        unquote(fun).(result)
+      end
+    end
+  end
+
+  @doc "Like `before_run`, but inherited by all child subcommands."
+  defmacro persistent_before_run(fun) do
+    quote do
+      count = Module.get_attribute(__MODULE__, :cheer_persistent_before_run_count)
+      Module.put_attribute(__MODULE__, :cheer_persistent_before_run_count, count + 1)
+
+      def __cheer_persistent_before_run__(unquote(Macro.var(:count, __MODULE__)), args) do
+        unquote(fun).(args)
+      end
+    end
+  end
+
+  # -- Param groups --
+
+  @doc """
+  Define a named group of options with a constraint.
+
+  Supports:
+    * `mutually_exclusive: true` -- at most one option in the group can be set
+    * `co_occurring: true` -- all or none of the options must be set
+  """
+  defmacro group(name, opts, do: block) do
+    quote do
+      @cheer_current_group {unquote(name), unquote(opts)}
+      unquote(block)
+      @cheer_current_group nil
+    end
+  end
+end
