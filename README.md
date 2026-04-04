@@ -1,5 +1,10 @@
 # Cheer
 
+[![CI](https://github.com/joshrotenberg/cheer/actions/workflows/ci.yml/badge.svg)](https://github.com/joshrotenberg/cheer/actions/workflows/ci.yml)
+[![Hex.pm](https://img.shields.io/hexpm/v/cheer.svg)](https://hex.pm/packages/cheer)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/cheer)
+[![License](https://img.shields.io/hexpm/l/cheer.svg)](LICENSE)
+
 A clap-inspired CLI framework for Elixir. Define your command tree once and get parsing, validation, help, shell completion, REPL mode, and testing for free.
 
 ## Features
