@@ -7,7 +7,11 @@ defmodule Cheer.Command.Compiler do
   defmacro __before_compile__(env) do
     name = Module.get_attribute(env.module, :cheer_command_name) || ""
     about = Module.get_attribute(env.module, :cheer_about) || ""
+    long_about = Module.get_attribute(env.module, :cheer_long_about)
     version = Module.get_attribute(env.module, :cheer_version)
+    before_help = Module.get_attribute(env.module, :cheer_before_help)
+    after_help = Module.get_attribute(env.module, :cheer_after_help)
+    aliases = Module.get_attribute(env.module, :cheer_aliases) || []
     arguments = Module.get_attribute(env.module, :cheer_arguments) |> Enum.reverse()
     options = Module.get_attribute(env.module, :cheer_options) |> Enum.reverse()
     subcommands = Module.get_attribute(env.module, :cheer_subcommands) |> Enum.reverse()
@@ -76,7 +80,11 @@ defmodule Cheer.Command.Compiler do
         %{
           name: unquote(name),
           about: unquote(about),
+          long_about: unquote(long_about),
           version: unquote(version),
+          before_help: unquote(before_help),
+          after_help: unquote(after_help),
+          aliases: unquote(aliases),
           arguments: unquote(arguments_expr),
           options: unquote(options_expr),
           subcommands: unquote(subcommands),

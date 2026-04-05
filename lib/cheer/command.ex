@@ -38,7 +38,11 @@ defmodule Cheer.Command do
 
       Module.register_attribute(__MODULE__, :cheer_command_name, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_about, accumulate: false)
+      Module.register_attribute(__MODULE__, :cheer_long_about, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_version, accumulate: false)
+      Module.register_attribute(__MODULE__, :cheer_before_help, accumulate: false)
+      Module.register_attribute(__MODULE__, :cheer_after_help, accumulate: false)
+      Module.register_attribute(__MODULE__, :cheer_aliases, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_arguments, accumulate: true)
       Module.register_attribute(__MODULE__, :cheer_options, accumulate: true)
       Module.register_attribute(__MODULE__, :cheer_subcommands, accumulate: true)

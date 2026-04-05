@@ -24,8 +24,20 @@ defmodule Cheer.Command.DSL do
   @doc "Set the command's description text, shown in help output."
   defmacro about(text), do: quote(do: @cheer_about(unquote(text)))
 
+  @doc "Set the command's extended description, shown by `--help` (long form)."
+  defmacro long_about(text), do: quote(do: @cheer_long_about(unquote(text)))
+
   @doc "Set the command's version string, printed by `--version` / `-V`."
   defmacro version(text), do: quote(do: @cheer_version(unquote(text)))
+
+  @doc "Set text displayed before the auto-generated help."
+  defmacro before_help(text), do: quote(do: @cheer_before_help(unquote(text)))
+
+  @doc "Set text displayed after the auto-generated help."
+  defmacro after_help(text), do: quote(do: @cheer_after_help(unquote(text)))
+
+  @doc "Set subcommand aliases (e.g. `aliases [\"co\", \"ck\"]` for `checkout`)."
+  defmacro aliases(list), do: quote(do: @cheer_aliases(unquote(list)))
 
   @doc "Register a child subcommand module."
   defmacro subcommand(module), do: quote(do: @cheer_subcommands(unquote(module)))
@@ -38,6 +50,9 @@ defmodule Cheer.Command.DSL do
     * `:type` - `:string` (default), `:integer`, `:float`, or `:boolean`
     * `:required` - `true` or `false` (default)
     * `:help` - help text shown in `--help`
+    * `:long_help` - extended help text shown by `--help` (long form)
+    * `:value_name` - placeholder name in help (e.g. `"FILE"`)
+    * `:hide` - `true` to hide from help output
     * `:validate` - `fn value -> :ok | {:error, msg} end`
   """
   defmacro argument(name, opts \\ []) do
@@ -71,6 +86,10 @@ defmodule Cheer.Command.DSL do
     * `:env` - environment variable name to read as fallback
     * `:choices` - list of allowed values
     * `:help` - help text shown in `--help`
+    * `:long_help` - extended help text shown by `--help` (long form)
+    * `:value_name` - placeholder name in help (e.g. `"FILE"`)
+    * `:hide` - `true` to hide from help output
+    * `:global` - `true` to propagate to all subcommands
     * `:validate` - `fn value -> :ok | {:error, msg} end`
 
   Boolean options automatically support `--no-<name>` negation (e.g. `--no-color`).

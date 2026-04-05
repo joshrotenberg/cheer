@@ -954,4 +954,277 @@ defmodule CheerTest do
       assert output =~ "[-- <args>...]"
     end
   end
+
+  # -- Hidden options and commands (#10) ---------------------------------------
+
+  defmodule TestHidden do
+    use Cheer.Command
+
+    command "tool" do
+      about("Tool with hidden stuff")
+
+      option(:debug, type: :boolean, hide: true, help: "Debug mode")
+      option(:verbose, type: :boolean, short: :v, help: "Verbose output")
+      argument(:input, type: :string, hide: true, help: "Hidden input")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "hidden options and arguments" do
+    test "hidden option is not shown in help" do
+      output = capture_io(fn -> Cheer.run(TestHidden, ["--help"]) end)
+      refute output =~ "debug"
+      assert output =~ "verbose"
+    end
+
+    test "hidden option still parses" do
+      assert {:ok, %{debug: true}} = Cheer.run(TestHidden, ["--debug"])
+    end
+
+    test "hidden argument is not shown in help" do
+      output = capture_io(fn -> Cheer.run(TestHidden, ["--help"]) end)
+      refute output =~ "<input>"
+    end
+
+    test "hidden argument still parses" do
+      assert {:ok, %{input: "foo"}} = Cheer.run(TestHidden, ["foo"])
+    end
+  end
+
+  # -- Subcommand aliases (#12) ------------------------------------------------
+
+  defmodule TestAliasedSub do
+    use Cheer.Command
+
+    command "checkout" do
+      about("Check out a branch")
+      aliases(["co", "ck"])
+
+      argument(:branch, type: :string, required: true, help: "Branch name")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestAliasRoot do
+    use Cheer.Command
+
+    command "git" do
+      about("Git-like tool")
+
+      subcommand(CheerTest.TestAliasedSub)
+    end
+  end
+
+  describe "subcommand aliases" do
+    test "dispatches via primary name" do
+      assert {:ok, %{branch: "main"}} = Cheer.run(TestAliasRoot, ["checkout", "main"])
+    end
+
+    test "dispatches via alias" do
+      assert {:ok, %{branch: "main"}} = Cheer.run(TestAliasRoot, ["co", "main"])
+    end
+
+    test "dispatches via second alias" do
+      assert {:ok, %{branch: "main"}} = Cheer.run(TestAliasRoot, ["ck", "main"])
+    end
+
+    test "aliases shown in help" do
+      output = capture_io(fn -> Cheer.run(TestAliasRoot, ["--help"]) end)
+      assert output =~ "checkout"
+      assert output =~ "co, ck"
+    end
+
+    test "did you mean considers aliases" do
+      output = capture_io(fn -> Cheer.run(TestAliasRoot, ["checkou"]) end)
+      assert output =~ "Did you mean"
+      assert output =~ "checkout"
+    end
+  end
+
+  # -- Long help (#9) ----------------------------------------------------------
+
+  defmodule TestLongHelp do
+    use Cheer.Command
+
+    command "analyzer" do
+      about("Analyze data")
+      long_about("Analyze data from multiple sources.\nSupports CSV, JSON, and Parquet formats.")
+
+      option(:format,
+        type: :string,
+        help: "Output format",
+        long_help: "Output format for the analysis results.\nSupported: json, table, csv."
+      )
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "long help" do
+    test "-h shows short about" do
+      output = capture_io(fn -> Cheer.run(TestLongHelp, ["-h"]) end)
+      assert output =~ "Analyze data"
+      refute output =~ "Supports CSV, JSON, and Parquet"
+    end
+
+    test "--help shows long about" do
+      output = capture_io(fn -> Cheer.run(TestLongHelp, ["--help"]) end)
+      assert output =~ "Supports CSV, JSON, and Parquet"
+    end
+
+    test "-h shows short option help" do
+      output = capture_io(fn -> Cheer.run(TestLongHelp, ["-h"]) end)
+      assert output =~ "Output format"
+      refute output =~ "Supported: json, table, csv"
+    end
+
+    test "--help shows long option help" do
+      output = capture_io(fn -> Cheer.run(TestLongHelp, ["--help"]) end)
+      assert output =~ "Supported: json, table, csv"
+    end
+  end
+
+  # -- Value names (#20) -------------------------------------------------------
+
+  defmodule TestValueNames do
+    use Cheer.Command
+
+    command "convert" do
+      about("Convert files")
+
+      argument(:input,
+        type: :string,
+        required: true,
+        value_name: "INPUT_FILE",
+        help: "Input path"
+      )
+
+      option(:output, type: :string, short: :o, value_name: "OUTPUT_FILE", help: "Output path")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "value names" do
+    test "value_name appears in argument help" do
+      output = capture_io(fn -> Cheer.run(TestValueNames, ["--help"]) end)
+      assert output =~ "<INPUT_FILE>"
+    end
+
+    test "value_name appears in option help" do
+      output = capture_io(fn -> Cheer.run(TestValueNames, ["--help"]) end)
+      assert output =~ "<OUTPUT_FILE>"
+    end
+
+    test "value_name appears in usage line" do
+      output = capture_io(fn -> Cheer.run(TestValueNames, ["--help"]) end)
+      assert output =~ "Usage: convert <INPUT_FILE>"
+    end
+  end
+
+  # -- Before/after help text (#16) --------------------------------------------
+
+  defmodule TestHelpText do
+    use Cheer.Command
+
+    command "mytool" do
+      about("A tool")
+      before_help("MyTool v1.0 -- the best tool")
+      after_help("EXAMPLES:\n  mytool --verbose input.txt")
+
+      option(:verbose, type: :boolean, help: "Verbose")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "before/after help text" do
+    test "before_help appears at the top" do
+      output = capture_io(fn -> Cheer.run(TestHelpText, ["--help"]) end)
+      assert output =~ "MyTool v1.0 -- the best tool"
+      # before_help should come before usage
+      [before_pos] = Regex.run(~r/MyTool v1.0/, output, return: :index)
+      [usage_pos] = Regex.run(~r/Usage:/, output, return: :index)
+      assert elem(before_pos, 0) < elem(usage_pos, 0)
+    end
+
+    test "after_help appears at the bottom" do
+      output = capture_io(fn -> Cheer.run(TestHelpText, ["--help"]) end)
+      assert output =~ "EXAMPLES:"
+      assert output =~ "mytool --verbose input.txt"
+      # after_help should come after --help line
+      [help_pos] = Regex.run(~r/Print help/, output, return: :index)
+      [after_pos] = Regex.run(~r/EXAMPLES:/, output, return: :index)
+      assert elem(after_pos, 0) > elem(help_pos, 0)
+    end
+  end
+
+  # -- Global options (#13) ----------------------------------------------------
+
+  defmodule TestGlobalChild do
+    use Cheer.Command
+
+    command "deploy" do
+      about("Deploy the app")
+      option(:target, type: :string, required: true, help: "Deploy target")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestGlobalRoot do
+    use Cheer.Command
+
+    command "app" do
+      about("App with global options")
+
+      option(:verbose, type: :boolean, short: :v, global: true, help: "Verbose output")
+      option(:config, type: :string, global: true, default: "config.toml", help: "Config file")
+
+      subcommand(CheerTest.TestGlobalChild)
+    end
+  end
+
+  describe "global options" do
+    test "global option available in subcommand" do
+      assert {:ok, %{verbose: true, target: "prod"}} =
+               Cheer.run(TestGlobalRoot, ["deploy", "--verbose", "--target", "prod"])
+    end
+
+    test "global option default inherited" do
+      assert {:ok, %{config: "config.toml", target: "prod"}} =
+               Cheer.run(TestGlobalRoot, ["deploy", "--target", "prod"])
+    end
+
+    test "global option overridden in subcommand" do
+      assert {:ok, %{config: "custom.toml", target: "prod"}} =
+               Cheer.run(TestGlobalRoot, [
+                 "deploy",
+                 "--config",
+                 "custom.toml",
+                 "--target",
+                 "prod"
+               ])
+    end
+
+    test "global option shown in subcommand help" do
+      output = capture_io(fn -> Cheer.run(TestGlobalRoot, ["deploy", "--help"]) end)
+      assert output =~ "verbose"
+      assert output =~ "config"
+      assert output =~ "target"
+    end
+
+    test "global option not duplicated if subcommand has same name" do
+      output = capture_io(fn -> Cheer.run(TestGlobalRoot, ["deploy", "--help"]) end)
+      assert output =~ "verbose"
+    end
+  end
 end
