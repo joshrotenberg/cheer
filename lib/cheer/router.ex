@@ -38,8 +38,26 @@ defmodule Cheer.Router do
       "--version" in argv or "-V" in argv ->
         print_version(meta)
 
+      match?(["help" | _], argv) ->
+        resolve_help(command, tl(argv), opts)
+
       true ->
         dispatch_command(command, meta, argv, Keyword.put(opts, :parent_hooks, hooks), hooks)
+    end
+  end
+
+  defp resolve_help(command, [], opts), do: Cheer.Help.print(command, opts)
+
+  defp resolve_help(command, [token | rest], opts) do
+    meta = command.__cheer_meta__()
+
+    case match_subcommand(meta.subcommands, [token]) do
+      {:ok, sub_module, _} ->
+        resolve_help(sub_module, rest, opts)
+
+      _ ->
+        IO.puts("error: unknown command '#{token}'")
+        :ok
     end
   end
 

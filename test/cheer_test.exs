@@ -326,6 +326,27 @@ defmodule CheerTest do
     end
   end
 
+  # -- Help subcommand ---------------------------------------------------------
+
+  describe "help subcommand" do
+    test "help with no args shows root help" do
+      output = capture_io(fn -> Cheer.run(TestRoot, ["help"]) end)
+      assert output =~ "COMMANDS:"
+      assert output =~ "greet"
+    end
+
+    test "help <subcommand> shows subcommand help" do
+      output = capture_io(fn -> Cheer.run(TestRoot, ["help", "greet"]) end)
+      assert output =~ "Say hello"
+      assert output =~ "<name>"
+    end
+
+    test "help with unknown subcommand shows error" do
+      output = capture_io(fn -> Cheer.run(TestRoot, ["help", "nope"]) end)
+      assert output =~ "error: unknown command 'nope'"
+    end
+  end
+
   # -- Program name in help ----------------------------------------------------
 
   describe "program name" do
