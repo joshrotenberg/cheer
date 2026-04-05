@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.3](https://github.com/joshrotenberg/cheer/compare/v0.1.2...v0.1.3) (2026-04-05)
+
+
+### Features
+
+* add 5 quick-win features from clap parity analysis ([#30](https://github.com/joshrotenberg/cheer/issues/30)) ([626bd7d](https://github.com/joshrotenberg/cheer/commit/626bd7d19a3fe951f0be826aa91720ac2da8e4b3))
+* add clap parity batch 1 -- 6 new features ([#29](https://github.com/joshrotenberg/cheer/issues/29)) ([10aabb1](https://github.com/joshrotenberg/cheer/commit/10aabb1fe5b5910a4917860a0e0994005f009695))
+* support `help` subcommand for displaying subcommand help ([#7](https://github.com/joshrotenberg/cheer/issues/7)) ([8431c54](https://github.com/joshrotenberg/cheer/commit/8431c549a74a46ae80739ceaef20115d0e28e19d))
+
 ## [0.1.2](https://github.com/joshrotenberg/cheer/compare/v0.1.1...v0.1.2) (2026-04-04)
 
 
