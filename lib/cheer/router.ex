@@ -28,18 +28,67 @@ defmodule Cheer.Router do
   defp dispatch_with_hooks(command, argv, opts, parent_hooks) do
     meta = command.__cheer_meta__()
 
+    # Accumulate global options from this command
+    parent_globals = Keyword.get(opts, :parent_globals, [])
+
+    global_opts =
+      meta.options
+      |> Enum.filter(fn {_name, o} -> Keyword.get(o, :global, false) end)
+
+    accumulated_globals = parent_globals ++ global_opts
+    opts = Keyword.put(opts, :parent_globals, accumulated_globals)
+
     # Accumulate persistent hooks from this command
     hooks = parent_hooks ++ Map.get(meta, :persistent_before_run, [])
 
+    # If the first token matches a subcommand, dispatch to it before checking
+    # flags. This ensures `tool sub --help` shows the subcommand's help.
+    first_is_subcommand =
+      case argv do
+        [token | _] ->
+          Enum.any?(meta.subcommands, fn sub ->
+            sub_meta = sub.__cheer_meta__()
+            sub_meta.name == token or token in Map.get(sub_meta, :aliases, [])
+          end)
+
+        _ ->
+          false
+      end
+
     cond do
-      "--help" in argv or "-h" in argv ->
+      first_is_subcommand ->
+        dispatch_command(command, meta, argv, Keyword.put(opts, :parent_hooks, hooks), hooks)
+
+      "--help" in argv ->
+        Cheer.Help.print(command, Keyword.put(opts, :long, true))
+
+      "-h" in argv ->
         Cheer.Help.print(command, opts)
 
       "--version" in argv or "-V" in argv ->
         print_version(meta)
 
+      match?(["help" | _], argv) ->
+        resolve_help(command, tl(argv), opts)
+
       true ->
         dispatch_command(command, meta, argv, Keyword.put(opts, :parent_hooks, hooks), hooks)
+    end
+  end
+
+  defp resolve_help(command, [], opts),
+    do: Cheer.Help.print(command, Keyword.put(opts, :long, true))
+
+  defp resolve_help(command, [token | rest], opts) do
+    meta = command.__cheer_meta__()
+
+    case match_subcommand(meta.subcommands, [token]) do
+      {:ok, sub_module, _} ->
+        resolve_help(sub_module, rest, opts)
+
+      _ ->
+        IO.puts("error: unknown command '#{token}'")
+        :ok
     end
   end
 
@@ -89,7 +138,18 @@ defmodule Cheer.Router do
   # -- Parsing pipeline --
 
   defp parse_and_validate(command, meta, argv, opts) do
-    {option_parser_opts, option_aliases} = build_option_parser_spec(meta.options)
+    # Merge parent global options with this command's options
+    parent_globals = Keyword.get(opts, :parent_globals, [])
+
+    inherited_globals =
+      parent_globals
+      |> Enum.reject(fn {name, _} ->
+        Enum.any?(meta.options, fn {n, _} -> n == name end)
+      end)
+
+    all_options = meta.options ++ inherited_globals
+
+    {option_parser_opts, option_aliases} = build_option_parser_spec(all_options)
 
     {parsed, positional, invalid} =
       OptionParser.parse(argv, strict: option_parser_opts, aliases: option_aliases)
@@ -98,8 +158,8 @@ defmodule Cheer.Router do
       print_invalid_options_error(command, invalid, opts)
       :handled
     else
-      args = apply_defaults(meta.options)
-      args = apply_env_vars(args, meta.options)
+      args = apply_defaults(all_options)
+      args = apply_env_vars(args, all_options)
       args = Map.merge(args, Map.new(parsed))
 
       args =
@@ -110,7 +170,7 @@ defmodule Cheer.Router do
         end)
 
       missing =
-        missing_required(meta.arguments, args) ++ missing_required(meta.options, args)
+        missing_required(meta.arguments, args) ++ missing_required(all_options, args)
 
       cond do
         missing != [] ->
@@ -119,7 +179,7 @@ defmodule Cheer.Router do
 
         true ->
           with :ok <- validate_groups(args, Map.get(meta, :groups, %{})),
-               :ok <- validate_params(args, meta.options),
+               :ok <- validate_params(args, all_options),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
           else
@@ -287,7 +347,11 @@ defmodule Cheer.Router do
     found =
       Enum.find_value(subcommands, nil, fn sub_module ->
         sub_meta = sub_module.__cheer_meta__()
-        if sub_meta.name == token, do: {:ok, sub_module, rest}
+        aliases = Map.get(sub_meta, :aliases, [])
+
+        if sub_meta.name == token or token in aliases do
+          {:ok, sub_module, rest}
+        end
       end)
 
     case found do
@@ -337,7 +401,11 @@ defmodule Cheer.Router do
 
     # "Did you mean?" suggestion
     if meta.subcommands != [] do
-      names = Enum.map(meta.subcommands, & &1.__cheer_meta__().name)
+      names =
+        Enum.flat_map(meta.subcommands, fn sub ->
+          sub_meta = sub.__cheer_meta__()
+          [sub_meta.name | Map.get(sub_meta, :aliases, [])]
+        end)
 
       case suggest(token, names) do
         nil -> :ok
