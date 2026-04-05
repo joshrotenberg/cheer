@@ -1227,4 +1227,198 @@ defmodule CheerTest do
       assert output =~ "verbose"
     end
   end
+
+  # -- subcommand_required (#21) -----------------------------------------------
+
+  defmodule TestSubRequired do
+    use Cheer.Command
+
+    command "strict" do
+      about("Requires a subcommand")
+      subcommand_required(true)
+
+      subcommand(CheerTest.TestGreet)
+    end
+  end
+
+  describe "subcommand_required" do
+    test "shows error when no subcommand given" do
+      output = capture_io(fn -> Cheer.run(TestSubRequired, []) end)
+      assert output =~ "error: a subcommand is required"
+    end
+
+    test "still shows help after the error" do
+      output = capture_io(fn -> Cheer.run(TestSubRequired, []) end)
+      assert output =~ "COMMANDS:"
+    end
+
+    test "works normally when subcommand is provided" do
+      assert {:ok, %{name: "world"}} = Cheer.run(TestSubRequired, ["greet", "world"])
+    end
+  end
+
+  # -- Custom usage line (#17) -------------------------------------------------
+
+  defmodule TestCustomUsage do
+    use Cheer.Command
+
+    command "tool" do
+      about("A tool")
+      usage("tool [FLAGS] <input> [output]")
+
+      argument(:input, type: :string, required: true, help: "Input file")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "custom usage line" do
+    test "overrides auto-generated usage" do
+      output = capture_io(fn -> Cheer.run(TestCustomUsage, ["--help"]) end)
+      assert output =~ "Usage: tool [FLAGS] <input> [output]"
+      refute output =~ "Usage: tool <input>"
+    end
+  end
+
+  # -- propagate_version (#24) -------------------------------------------------
+
+  defmodule TestPropChild do
+    use Cheer.Command
+
+    command "sub" do
+      about("A child")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestPropRoot do
+    use Cheer.Command
+
+    command "myapp" do
+      about("Propagates version")
+      version("2.0.0")
+      propagate_version(true)
+
+      subcommand(CheerTest.TestPropChild)
+    end
+  end
+
+  describe "propagate_version" do
+    test "subcommand inherits version" do
+      output = capture_io(fn -> Cheer.run(TestPropRoot, ["sub", "--version"]) end)
+      assert output =~ "2.0.0"
+    end
+
+    test "root still has its own version" do
+      output = capture_io(fn -> Cheer.run(TestPropRoot, ["--version"]) end)
+      assert output =~ "myapp 2.0.0"
+    end
+  end
+
+  # -- Option aliases (#11) ----------------------------------------------------
+
+  defmodule TestOptAliases do
+    use Cheer.Command
+
+    command "style" do
+      about("Style options")
+
+      option(:color, type: :string, aliases: [:colour], help: "Color theme")
+      option(:output, type: :string, short: :o, aliases: [:out], help: "Output path")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "option aliases" do
+    test "primary name works" do
+      assert {:ok, %{color: "red"}} = Cheer.run(TestOptAliases, ["--color", "red"])
+    end
+
+    test "alias works" do
+      assert {:ok, %{color: "blue"}} = Cheer.run(TestOptAliases, ["--colour", "blue"])
+    end
+
+    test "alias with short flag" do
+      assert {:ok, %{output: "out.txt"}} = Cheer.run(TestOptAliases, ["--out", "out.txt"])
+    end
+
+    test "aliases shown in help" do
+      output = capture_io(fn -> Cheer.run(TestOptAliases, ["--help"]) end)
+      assert output =~ "--colour"
+      assert output =~ "--out"
+    end
+  end
+
+  # -- trailing_var_arg (#26) --------------------------------------------------
+
+  defmodule TestTrailing do
+    use Cheer.Command
+
+    command "exec" do
+      about("Execute a command")
+
+      argument(:program, type: :string, required: true, help: "Program to run")
+      trailing_var_arg(:args, help: "Arguments to pass")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestTrailingRequired do
+    use Cheer.Command
+
+    command "cat" do
+      about("Concatenate files")
+
+      trailing_var_arg(:files, required: true, help: "Files to concatenate")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "trailing_var_arg" do
+    test "collects trailing args under declared name" do
+      assert {:ok, %{program: "ls", args: ["-la", "/tmp"]}} =
+               Cheer.run(TestTrailing, ["ls", "--", "-la", "/tmp"])
+    end
+
+    test "empty trailing gives empty list" do
+      assert {:ok, %{program: "ls", args: []}} = Cheer.run(TestTrailing, ["ls"])
+    end
+
+    test "shown in help" do
+      output = capture_io(fn -> Cheer.run(TestTrailing, ["--help"]) end)
+      assert output =~ "<args>..."
+      assert output =~ "Arguments to pass"
+    end
+
+    test "shown in usage line" do
+      output = capture_io(fn -> Cheer.run(TestTrailing, ["--help"]) end)
+      assert output =~ "[args]..."
+    end
+
+    test "required trailing shown with required marker" do
+      output = capture_io(fn -> Cheer.run(TestTrailingRequired, ["--help"]) end)
+      assert output =~ "<files>..."
+      assert output =~ "(required)"
+    end
+
+    test "required trailing errors when empty" do
+      output = capture_io(fn -> Cheer.run(TestTrailingRequired, []) end)
+      assert output =~ "missing required"
+      assert output =~ "files"
+    end
+
+    test "required trailing succeeds with values" do
+      assert {:ok, %{files: ["a.txt", "b.txt"]}} =
+               Cheer.run(TestTrailingRequired, ["a.txt", "b.txt"])
+    end
+  end
 end

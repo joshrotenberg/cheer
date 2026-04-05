@@ -12,6 +12,10 @@ defmodule Cheer.Command.Compiler do
     before_help = Module.get_attribute(env.module, :cheer_before_help)
     after_help = Module.get_attribute(env.module, :cheer_after_help)
     aliases = Module.get_attribute(env.module, :cheer_aliases) || []
+    usage = Module.get_attribute(env.module, :cheer_usage)
+    subcommand_required = Module.get_attribute(env.module, :cheer_subcommand_required) || false
+    propagate_version = Module.get_attribute(env.module, :cheer_propagate_version) || false
+    trailing_var_arg = Module.get_attribute(env.module, :cheer_trailing_var_arg)
     arguments = Module.get_attribute(env.module, :cheer_arguments) |> Enum.reverse()
     options = Module.get_attribute(env.module, :cheer_options) |> Enum.reverse()
     subcommands = Module.get_attribute(env.module, :cheer_subcommands) |> Enum.reverse()
@@ -85,6 +89,10 @@ defmodule Cheer.Command.Compiler do
           before_help: unquote(before_help),
           after_help: unquote(after_help),
           aliases: unquote(aliases),
+          usage: unquote(usage),
+          subcommand_required: unquote(subcommand_required),
+          propagate_version: unquote(propagate_version),
+          trailing_var_arg: unquote(Macro.escape(trailing_var_arg)),
           arguments: unquote(arguments_expr),
           options: unquote(options_expr),
           subcommands: unquote(subcommands),

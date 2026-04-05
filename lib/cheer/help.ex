@@ -30,7 +30,13 @@ defmodule Cheer.Help do
     end
 
     IO.puts("")
-    IO.puts(format_usage(meta, prog))
+
+    if meta[:usage] do
+      IO.puts("Usage: #{meta.usage}")
+    else
+      IO.puts(format_usage(meta, prog))
+    end
+
     IO.puts("")
 
     about_text = if long, do: meta[:long_about] || meta.about, else: meta.about
@@ -64,7 +70,9 @@ defmodule Cheer.Help do
         Keyword.get(arg_opts, :hide, false)
       end)
 
-    if visible_arguments != [] do
+    has_trailing = meta[:trailing_var_arg] != nil
+
+    if visible_arguments != [] or has_trailing do
       IO.puts("ARGUMENTS:")
 
       for {name, arg_opts} <- visible_arguments do
@@ -72,6 +80,16 @@ defmodule Cheer.Help do
         help = pick_help(arg_opts, long)
         required = if Keyword.get(arg_opts, :required, false), do: " (required)", else: ""
         IO.puts("  #{String.pad_trailing("<#{display_name}>", 20)} #{help}#{required}")
+      end
+
+      if has_trailing do
+        {tva_name, tva_opts} = meta.trailing_var_arg
+        tva_help = Keyword.get(tva_opts, :help, "")
+
+        tva_required =
+          if Keyword.get(tva_opts, :required, false), do: " (required)", else: ""
+
+        IO.puts("  #{String.pad_trailing("<#{tva_name}>...", 20)} #{tva_help}#{tva_required}")
       end
 
       IO.puts("")
@@ -107,6 +125,16 @@ defmodule Cheer.Help do
 
         flag_name =
           if type == :boolean, do: "[no-]#{name}", else: to_string(name)
+
+        opt_aliases = Keyword.get(opt_opts, :aliases, [])
+
+        flag_name =
+          if opt_aliases != [] do
+            alias_str = Enum.map_join(opt_aliases, ", ", &"--#{&1}")
+            "#{flag_name} (#{alias_str})"
+          else
+            flag_name
+          end
 
         value_suffix =
           case Keyword.get(opt_opts, :value_name) do
@@ -215,7 +243,24 @@ defmodule Cheer.Help do
         end)
 
     parts = if meta.options != [], do: parts ++ ["[OPTIONS]"], else: parts
-    parts = if meta.subcommands == [], do: parts ++ ["[-- <args>...]"], else: parts
+
+    parts =
+      if meta.subcommands == [] do
+        case meta[:trailing_var_arg] do
+          {tva_name, tva_opts} ->
+            label =
+              if Keyword.get(tva_opts, :required, false),
+                do: "<#{tva_name}>...",
+                else: "[#{tva_name}]..."
+
+            parts ++ [label]
+
+          _ ->
+            parts ++ ["[-- <args>...]"]
+        end
+      else
+        parts
+      end
 
     Enum.join(parts, " ")
   end

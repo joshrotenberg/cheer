@@ -39,6 +39,32 @@ defmodule Cheer.Command.DSL do
   @doc "Set subcommand aliases (e.g. `aliases [\"co\", \"ck\"]` for `checkout`)."
   defmacro aliases(list), do: quote(do: @cheer_aliases(unquote(list)))
 
+  @doc "Override the auto-generated usage line in help output."
+  defmacro usage(text), do: quote(do: @cheer_usage(unquote(text)))
+
+  @doc "Require that a subcommand is provided (error instead of showing help)."
+  defmacro subcommand_required(val), do: quote(do: @cheer_subcommand_required(unquote(val)))
+
+  @doc "Propagate this command's version to all subcommands."
+  defmacro propagate_version(val), do: quote(do: @cheer_propagate_version(unquote(val)))
+
+  @doc """
+  Declare a named trailing variable argument.
+
+  Everything after the last declared positional (or after `--`) is collected
+  and available as `args[name]` instead of the default `:rest` key. The name
+  and help text are shown in the usage and help output.
+
+  Options:
+    * `:help` - help text shown in `--help`
+    * `:required` - `true` if at least one trailing arg must be provided
+  """
+  defmacro trailing_var_arg(name, opts \\ []) do
+    quote do
+      @cheer_trailing_var_arg {unquote(name), unquote(Macro.escape(opts))}
+    end
+  end
+
   @doc "Register a child subcommand module."
   defmacro subcommand(module), do: quote(do: @cheer_subcommands(unquote(module)))
 
@@ -90,6 +116,7 @@ defmodule Cheer.Command.DSL do
     * `:value_name` - placeholder name in help (e.g. `"FILE"`)
     * `:hide` - `true` to hide from help output
     * `:global` - `true` to propagate to all subcommands
+    * `:aliases` - list of alternative long names (e.g. `[:colour]` for `:color`)
     * `:validate` - `fn value -> :ok | {:error, msg} end`
 
   Boolean options automatically support `--no-<name>` negation (e.g. `--no-color`).

@@ -28,6 +28,21 @@ defmodule Cheer.Router do
   defp dispatch_with_hooks(command, argv, opts, parent_hooks) do
     meta = command.__cheer_meta__()
 
+    # Propagate version from parent if enabled
+    meta =
+      if meta.version == nil and Keyword.has_key?(opts, :propagated_version) do
+        Map.put(meta, :version, Keyword.get(opts, :propagated_version))
+      else
+        meta
+      end
+
+    opts =
+      if meta.propagate_version and meta.version do
+        Keyword.put(opts, :propagated_version, meta.version)
+      else
+        opts
+      end
+
     # Accumulate global options from this command
     parent_globals = Keyword.get(opts, :parent_globals, [])
 
@@ -99,6 +114,11 @@ defmodule Cheer.Router do
       {:error, unknown_token} ->
         print_unknown_command(meta, unknown_token)
 
+      :none when meta.subcommands != [] and meta.subcommand_required ->
+        IO.puts("error: a subcommand is required")
+        IO.puts("")
+        Cheer.Help.print(command, opts)
+
       :none when meta.subcommands != [] ->
         Cheer.Help.print(command, opts)
 
@@ -169,11 +189,28 @@ defmodule Cheer.Router do
           Map.put(acc, name, coerce_arg(value, arg_opts))
         end)
 
-      args = Map.put(args, :rest, rest_args)
+      args =
+        case meta[:trailing_var_arg] do
+          {tva_name, _tva_opts} -> Map.put(args, tva_name, rest_args)
+          _ -> Map.put(args, :rest, rest_args)
+        end
 
       missing =
         missing_required(meta.arguments, args) ++
           missing_required_options(all_options, args)
+
+      missing =
+        case meta[:trailing_var_arg] do
+          {tva_name, tva_opts} ->
+            if Keyword.get(tva_opts, :required, false) and rest_args == [] do
+              missing ++ [tva_name]
+            else
+              missing
+            end
+
+          _ ->
+            missing
+        end
 
       cond do
         missing != [] ->
@@ -409,23 +446,49 @@ defmodule Cheer.Router do
         end
       end)
 
+    # Long-form option aliases get added as separate spec entries
+    # that OptionParser will parse, then we remap them in build_parsed_map
+    alias_specs =
+      options
+      |> Enum.filter(fn {_name, opts} -> Keyword.has_key?(opts, :aliases) end)
+      |> Enum.flat_map(fn {_name, opts} ->
+        type = Keyword.get(opts, :type, :string)
+
+        type_spec =
+          if Keyword.get(opts, :multi, false), do: [type, :keep], else: type
+
+        Enum.map(Keyword.fetch!(opts, :aliases), fn a -> {a, type_spec} end)
+      end)
+
     aliases =
       options
       |> Enum.filter(fn {_name, opts} -> Keyword.has_key?(opts, :short) end)
       |> Enum.map(fn {name, opts} -> {Keyword.fetch!(opts, :short), name} end)
 
-    {spec, aliases}
+    {spec ++ alias_specs, aliases}
   end
 
   defp build_parsed_map(parsed, options) do
     multi_names =
       for {name, opts} <- options, Keyword.get(opts, :multi, false), into: MapSet.new(), do: name
 
+    # Build alias -> primary name mapping
+    alias_map =
+      options
+      |> Enum.filter(fn {_name, opts} -> Keyword.has_key?(opts, :aliases) end)
+      |> Enum.flat_map(fn {name, opts} ->
+        Enum.map(Keyword.fetch!(opts, :aliases), fn a -> {a, name} end)
+      end)
+      |> Map.new()
+
     Enum.reduce(parsed, %{}, fn {key, value}, acc ->
-      if MapSet.member?(multi_names, key) do
-        Map.update(acc, key, [value], &(&1 ++ [value]))
+      # Remap alias to primary name
+      primary = Map.get(alias_map, key, key)
+
+      if MapSet.member?(multi_names, primary) do
+        Map.update(acc, primary, [value], &(&1 ++ [value]))
       else
-        Map.put(acc, key, value)
+        Map.put(acc, primary, value)
       end
     end)
   end
