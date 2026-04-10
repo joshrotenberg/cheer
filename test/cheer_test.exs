@@ -1704,4 +1704,230 @@ defmodule CheerTest do
       assert output =~ "is ambiguous"
     end
   end
+
+  # -- conflicts_with / requires ----------------------------------------------
+
+  defmodule TestConflicts do
+    use Cheer.Command
+
+    command "conflicts" do
+      about("Test conflicts_with")
+
+      option(:json, type: :boolean, conflicts_with: :yaml, help: "JSON output")
+      option(:yaml, type: :boolean, help: "YAML output")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestConflictsList do
+    use Cheer.Command
+
+    command "conflicts-list" do
+      about("Test conflicts_with as a list")
+
+      option(:json, type: :boolean, conflicts_with: [:yaml, :toml])
+      option(:yaml, type: :boolean)
+      option(:toml, type: :boolean)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestRequires do
+    use Cheer.Command
+
+    command "requires" do
+      about("Test requires")
+
+      option(:user, type: :string, requires: :password, help: "User")
+      option(:password, type: :string, help: "Password")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestRequiresList do
+    use Cheer.Command
+
+    command "requires-list" do
+      about("Test requires as a list")
+
+      option(:deploy, type: :boolean, requires: [:env, :region])
+      option(:env, type: :string)
+      option(:region, type: :string)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "conflicts_with" do
+    test "succeeds when only one of the conflicting options is set" do
+      assert {:ok, %{json: true}} = Cheer.run(TestConflicts, ["--json"])
+      assert {:ok, %{yaml: true}} = Cheer.run(TestConflicts, ["--yaml"])
+    end
+
+    test "errors when both conflicting options are set" do
+      output = capture_io(fn -> Cheer.run(TestConflicts, ["--json", "--yaml"]) end)
+      assert output =~ "error: --json cannot be used with --yaml"
+    end
+
+    test "succeeds when neither is set" do
+      assert {:ok, _} = Cheer.run(TestConflicts, [])
+    end
+
+    test "list form errors on first conflict found" do
+      output = capture_io(fn -> Cheer.run(TestConflictsList, ["--json", "--toml"]) end)
+      assert output =~ "error: --json cannot be used with --toml"
+    end
+
+    test "list form succeeds when no conflicts present" do
+      assert {:ok, _} = Cheer.run(TestConflictsList, ["--json"])
+    end
+  end
+
+  describe "requires" do
+    test "succeeds when both required options are present" do
+      assert {:ok, %{user: "alice", password: "secret"}} =
+               Cheer.run(TestRequires, ["--user", "alice", "--password", "secret"])
+    end
+
+    test "errors when option is set without its dependency" do
+      output = capture_io(fn -> Cheer.run(TestRequires, ["--user", "alice"]) end)
+      assert output =~ "error: --user requires --password"
+    end
+
+    test "succeeds when neither option is set" do
+      assert {:ok, _} = Cheer.run(TestRequires, [])
+    end
+
+    test "list form errors when any required option is missing" do
+      output = capture_io(fn -> Cheer.run(TestRequiresList, ["--deploy", "--env", "prod"]) end)
+      assert output =~ "error: --deploy requires --region"
+    end
+
+    test "list form succeeds when all required options are present" do
+      assert {:ok, _} =
+               Cheer.run(TestRequiresList, ["--deploy", "--env", "prod", "--region", "us-east"])
+    end
+  end
+
+  # -- required_if / required_unless ------------------------------------------
+
+  defmodule TestRequiredIf do
+    use Cheer.Command
+
+    command "req-if" do
+      about("Test required_if")
+
+      option(:format, type: :string, choices: ["json", "table", "raw"], help: "Format")
+      option(:output, type: :string, required_if: [format: "json"], help: "Output file")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestRequiredIfMulti do
+    use Cheer.Command
+
+    command "req-if-multi" do
+      about("Test required_if with multiple conditions")
+
+      option(:mode, type: :string, choices: ["dev", "prod", "test"])
+      option(:env, type: :string)
+      option(:secret, type: :string, required_if: [mode: "prod", env: "live"])
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestRequiredUnless do
+    use Cheer.Command
+
+    command "req-unless" do
+      about("Test required_unless")
+
+      option(:config, type: :string, required_unless: :inline, help: "Config file")
+      option(:inline, type: :boolean, help: "Use inline config")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestRequiredUnlessList do
+    use Cheer.Command
+
+    command "req-unless-list" do
+      about("Test required_unless as a list")
+
+      option(:input, type: :string, required_unless: [:stdin, :url])
+      option(:stdin, type: :boolean)
+      option(:url, type: :string)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "required_if" do
+    test "not required when condition does not hold" do
+      assert {:ok, _} = Cheer.run(TestRequiredIf, ["--format", "table"])
+    end
+
+    test "required when condition holds and missing" do
+      output = capture_io(fn -> Cheer.run(TestRequiredIf, ["--format", "json"]) end)
+      assert output =~ "error: --output is required when --format is 'json'"
+    end
+
+    test "succeeds when condition holds and option provided" do
+      assert {:ok, _} =
+               Cheer.run(TestRequiredIf, ["--format", "json", "--output", "out.json"])
+    end
+
+    test "not required when neither condition option is set" do
+      assert {:ok, _} = Cheer.run(TestRequiredIf, [])
+    end
+
+    test "fires on the first matching condition in a multi-pair list" do
+      output = capture_io(fn -> Cheer.run(TestRequiredIfMulti, ["--mode", "prod"]) end)
+      assert output =~ "error: --secret is required when --mode is 'prod'"
+    end
+
+    test "fires when only the second condition matches" do
+      output = capture_io(fn -> Cheer.run(TestRequiredIfMulti, ["--env", "live"]) end)
+      assert output =~ "error: --secret is required when --env is 'live'"
+    end
+  end
+
+  describe "required_unless" do
+    test "errors when option missing and dependency absent" do
+      output = capture_io(fn -> Cheer.run(TestRequiredUnless, []) end)
+      assert output =~ "error: --config is required unless --inline is provided"
+    end
+
+    test "succeeds when dependency is present" do
+      assert {:ok, _} = Cheer.run(TestRequiredUnless, ["--inline"])
+    end
+
+    test "succeeds when option itself is present" do
+      assert {:ok, _} = Cheer.run(TestRequiredUnless, ["--config", "app.conf"])
+    end
+
+    test "list form requires any one of the dependencies" do
+      assert {:ok, _} = Cheer.run(TestRequiredUnlessList, ["--stdin"])
+      assert {:ok, _} = Cheer.run(TestRequiredUnlessList, ["--url", "http://x"])
+    end
+
+    test "list form errors when none of the dependencies are present" do
+      output = capture_io(fn -> Cheer.run(TestRequiredUnlessList, []) end)
+      assert output =~ "error: --input is required unless --stdin, --url is provided"
+    end
+  end
 end

@@ -138,6 +138,12 @@ defmodule Cheer.Command.DSL do
     * `:aliases` - list of alternative long names (e.g. `[:colour]` for `:color`)
     * `:display_order` - integer controlling position within its help section (lower first)
     * `:help_heading` - string; options sharing a heading are grouped under it in help
+    * `:conflicts_with` - atom or list of atoms; this option cannot be used with the named option(s)
+    * `:requires` - atom or list of atoms; the named option(s) must also be present
+    * `:required_if` - keyword list `[other_opt: value]`; this option is required when
+      any pair matches (i.e. `args[other_opt] == value`)
+    * `:required_unless` - atom or list of atoms; this option is required unless any
+      of the named options are present
     * `:validate` - `fn value -> :ok | {:error, msg} end`
 
   Boolean options automatically support `--no-<name>` negation (e.g. `--no-color`).
