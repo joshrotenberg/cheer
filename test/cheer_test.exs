@@ -1601,4 +1601,107 @@ defmodule CheerTest do
       assert a_pos < b_pos
     end
   end
+
+  # -- infer_subcommands ------------------------------------------------------
+
+  defmodule TestInferCheckout do
+    use Cheer.Command
+
+    command "checkout" do
+      about("Check out a branch")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, {:checkout, args}}
+  end
+
+  defmodule TestInferCheck do
+    use Cheer.Command
+
+    command "check" do
+      about("Run checks")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, {:check, args}}
+  end
+
+  defmodule TestInferStatus do
+    use Cheer.Command
+
+    command "status" do
+      about("Show status")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, {:status, args}}
+  end
+
+  defmodule TestInferRoot do
+    use Cheer.Command
+
+    command "git" do
+      about("Tiny git")
+      infer_subcommands(true)
+
+      subcommand(CheerTest.TestInferCheckout)
+      subcommand(CheerTest.TestInferCheck)
+      subcommand(CheerTest.TestInferStatus)
+    end
+  end
+
+  defmodule TestNoInferRoot do
+    use Cheer.Command
+
+    command "git" do
+      about("Tiny git, no inference")
+
+      subcommand(CheerTest.TestInferCheckout)
+      subcommand(CheerTest.TestInferStatus)
+    end
+  end
+
+  describe "infer_subcommands" do
+    test "unique prefix resolves to the matching subcommand" do
+      assert {:ok, {:status, _}} = Cheer.run(TestInferRoot, ["sta"])
+    end
+
+    test "ambiguous prefix prints error and lists candidates" do
+      output = capture_io(fn -> Cheer.run(TestInferRoot, ["che"]) end)
+      assert output =~ "error: 'che' is ambiguous"
+      assert output =~ "candidates:"
+      assert output =~ "check"
+      assert output =~ "checkout"
+    end
+
+    test "exact match wins over prefix" do
+      # `check` is also a prefix of `checkout`, but exact match takes priority
+      assert {:ok, {:check, _}} = Cheer.run(TestInferRoot, ["check"])
+    end
+
+    test "non-matching prefix falls back to unknown command" do
+      output = capture_io(fn -> Cheer.run(TestInferRoot, ["xyz"]) end)
+      assert output =~ "error: unknown command 'xyz'"
+    end
+
+    test "inference is disabled by default" do
+      output = capture_io(fn -> Cheer.run(TestNoInferRoot, ["sta"]) end)
+      assert output =~ "error: unknown command 'sta'"
+    end
+
+    test "inferred subcommand still receives flags" do
+      output = capture_io(fn -> Cheer.run(TestInferRoot, ["sta", "--help"]) end)
+      assert output =~ "Show status"
+    end
+
+    test "help <prefix> resolves the inferred command" do
+      output = capture_io(fn -> Cheer.run(TestInferRoot, ["help", "sta"]) end)
+      assert output =~ "Show status"
+    end
+
+    test "help <ambiguous-prefix> reports the ambiguity" do
+      output = capture_io(fn -> Cheer.run(TestInferRoot, ["help", "che"]) end)
+      assert output =~ "is ambiguous"
+    end
+  end
 end
