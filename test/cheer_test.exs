@@ -1531,6 +1531,20 @@ defmodule CheerTest do
     def run(args, _raw), do: {:ok, args}
   end
 
+  defmodule TestDisplayOrderHidden do
+    use Cheer.Command
+
+    command "ordered-hidden" do
+      about("display_order combined with hide")
+
+      option(:visible, type: :string, help: "Shown", display_order: 2)
+      option(:secret, type: :string, help: "Hidden", display_order: 1, hide: true)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
   describe "display_order for options" do
     test "options sorted by display_order, unordered fall back to declaration order" do
       output = capture_io(fn -> Cheer.run(TestDisplayOrderOpts, ["--help"]) end)
@@ -1539,6 +1553,12 @@ defmodule CheerTest do
       middle_pos = :binary.match(output, "--middle") |> elem(0)
       assert zulu_pos < alpha_pos
       assert alpha_pos < middle_pos
+    end
+
+    test "hidden options stay hidden even with display_order" do
+      output = capture_io(fn -> Cheer.run(TestDisplayOrderHidden, ["--help"]) end)
+      refute output =~ "--secret"
+      assert output =~ "--visible"
     end
   end
 
@@ -1599,6 +1619,14 @@ defmodule CheerTest do
       a_pos = :binary.match(output, "--a_opt") |> elem(0)
       b_pos = :binary.match(output, "--b_opt") |> elem(0)
       assert a_pos < b_pos
+    end
+
+    test "no default OPTIONS section when every option has a heading" do
+      output = capture_io(fn -> Cheer.run(TestHeadingWithOrder, ["--help"]) end)
+      assert output =~ "NET:"
+      # The default OPTIONS: section header should not appear when every
+      # visible option lives under a custom heading.
+      refute output =~ ~r/^OPTIONS:/m
     end
   end
 
@@ -1703,6 +1731,12 @@ defmodule CheerTest do
       output = capture_io(fn -> Cheer.run(TestInferRoot, ["help", "che"]) end)
       assert output =~ "is ambiguous"
     end
+
+    test "empty argv on an inferring branch shows help (no crash)" do
+      output = capture_io(fn -> Cheer.run(TestInferRoot, []) end)
+      assert output =~ "Tiny git"
+      assert output =~ "COMMANDS:"
+    end
   end
 
   # -- conflicts_with / requires ----------------------------------------------
@@ -1773,6 +1807,14 @@ defmodule CheerTest do
 
     test "errors when both conflicting options are set" do
       output = capture_io(fn -> Cheer.run(TestConflicts, ["--json", "--yaml"]) end)
+      assert output =~ "error: --json cannot be used with --yaml"
+    end
+
+    test "fires regardless of CLI argument order (declaration order wins)" do
+      # :yaml does not declare conflicts_with, but :json does. Validation
+      # iterates options in declaration order, so the error message is always
+      # phrased in terms of the option that owns the constraint.
+      output = capture_io(fn -> Cheer.run(TestConflicts, ["--yaml", "--json"]) end)
       assert output =~ "error: --json cannot be used with --yaml"
     end
 
@@ -1847,6 +1889,21 @@ defmodule CheerTest do
     def run(args, _raw), do: {:ok, args}
   end
 
+  defmodule TestRequiredIfNonString do
+    use Cheer.Command
+
+    command "req-if-typed" do
+      about("Test required_if with non-string trigger values")
+
+      option(:retries, type: :integer)
+      option(:dry_run, type: :boolean)
+      option(:notify, type: :string, required_if: [retries: 0, dry_run: true])
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
   defmodule TestRequiredUnless do
     use Cheer.Command
 
@@ -1903,6 +1960,20 @@ defmodule CheerTest do
     test "fires when only the second condition matches" do
       output = capture_io(fn -> Cheer.run(TestRequiredIfMulti, ["--env", "live"]) end)
       assert output =~ "error: --secret is required when --env is 'live'"
+    end
+
+    test "matches integer trigger values" do
+      output = capture_io(fn -> Cheer.run(TestRequiredIfNonString, ["--retries", "0"]) end)
+      assert output =~ "error: --notify is required when --retries is 0"
+    end
+
+    test "matches boolean trigger values" do
+      output = capture_io(fn -> Cheer.run(TestRequiredIfNonString, ["--dry-run"]) end)
+      assert output =~ "error: --notify is required when --dry_run is true"
+    end
+
+    test "no match when integer value differs" do
+      assert {:ok, _} = Cheer.run(TestRequiredIfNonString, ["--retries", "3"])
     end
   end
 

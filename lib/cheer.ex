@@ -34,7 +34,7 @@ defmodule Cheer do
   - Option parsing via OptionParser
   - Type validation and coercion
   - Help text generation
-  - Shell completion script generation (planned)
+  - Shell completion script generation (bash, zsh, fish)
   """
 
   @doc """

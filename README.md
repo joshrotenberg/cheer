@@ -13,10 +13,13 @@ A clap-inspired CLI framework for Elixir. Define your command tree once and get 
 - **Arbitrary nesting** -- subcommand trees of any depth
 - **Typed options and arguments** -- `:string`, `:integer`, `:float`, `:boolean` with automatic coercion
 - **Validation** -- per-param (`:validate`, `:choices`), cross-param (`validate/1`), required fields
+- **Conditional required** -- `:required_if` and `:required_unless` for inter-option dependencies
+- **Per-option constraints** -- `:conflicts_with` and `:requires` for relational rules
 - **Environment variable fallback** -- `option :port, env: "MY_PORT"`
 - **Param groups** -- mutually exclusive and co-occurring option groups
 - **Lifecycle hooks** -- `before_run`, `after_run`, `persistent_before_run` (inherited by children)
-- **Auto-generated help** -- includes defaults, env vars, choices, groups
+- **Auto-generated help** -- defaults, env vars, choices, groups, custom headings, ordering
+- **Subcommand prefix inference** -- `infer_subcommands true` resolves unambiguous prefixes
 - **Shell completion** -- bash, zsh, and fish script generation
 - **REPL mode** -- interactive command shell from the same command tree
 - **In-process test runner** -- `Cheer.Test.run/3` captures output and return values
@@ -52,7 +55,7 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
 ```elixir
 # Per-param: inline function
 option :port, type: :integer,
-  validate: fn p -> if p in 1024..65535, do: :ok, else: {:error, "invalid port"} end
+  validate: fn p -> if p in 1024..65_535, do: :ok, else: {:error, "invalid port"} end
 
 # Per-param: choices
 option :format, type: :string, choices: ["json", "csv", "table"]
@@ -61,6 +64,26 @@ option :format, type: :string, choices: ["json", "csv", "table"]
 validate fn args ->
   if args[:tls] && !args[:cert], do: {:error, "--tls requires --cert"}, else: :ok
 end
+```
+
+## Conditional Required and Per-Option Constraints
+
+```elixir
+# Required only when another option holds a particular value
+option :format, type: :string, choices: ["json", "table"]
+option :output, type: :string, required_if: [format: "json"]
+# error: --output is required when --format is 'json'
+
+# Required unless any of the named options is present
+option :config, type: :string, required_unless: [:inline, :stdin]
+
+# Cannot be combined with another option (atom or list)
+option :json, type: :boolean, conflicts_with: :yaml
+option :json, type: :boolean, conflicts_with: [:yaml, :toml]
+
+# Implies that another option must also be present
+option :user, type: :string, requires: :password
+option :deploy, type: :boolean, requires: [:env, :region]
 ```
 
 ## Environment Variable Fallback
@@ -83,6 +106,44 @@ group :auth, co_occurring: true do
   option :password, type: :string
 end
 ```
+
+## Help Customization
+
+```elixir
+# Group options under custom headings
+option :host, type: :string, help_heading: "Network"
+option :port, type: :integer, help_heading: "Network"
+option :user, type: :string, help_heading: "Auth"
+
+# Control display order within a section (lower numbers first)
+option :verbose, type: :boolean, display_order: 1
+option :quiet, type: :boolean, display_order: 2
+
+# Order subcommands in the parent's help
+command "deploy" do
+  display_order 1
+end
+```
+
+Help output groups by heading (default `OPTIONS:` first, then each custom
+heading in declaration order). Within each section items are sorted by
+`:display_order`, with stable fallback to declaration order.
+
+## Subcommand Prefix Inference
+
+```elixir
+command "git" do
+  infer_subcommands true
+
+  subcommand MyApp.CLI.Checkout
+  subcommand MyApp.CLI.Status
+end
+
+# git sta      -> resolves to status
+# git che      -> error: 'che' is ambiguous; candidates: check, checkout
+```
+
+Exact matches always win over prefix inference. Aliases are not prefix-matched.
 
 ## Lifecycle Hooks
 
@@ -152,7 +213,7 @@ The `examples/` directory contains standalone Mix projects you can run and exper
 
 ```elixir
 def deps do
-  [{:cheer, "~> 0.1.0"}]
+  [{:cheer, "~> 0.1"}]
 end
 ```
 
