@@ -49,6 +49,14 @@ defmodule Cheer.Command.DSL do
   defmacro propagate_version(val), do: quote(do: @cheer_propagate_version(unquote(val)))
 
   @doc """
+  Set this command's display order as a subcommand in its parent's help output.
+
+  Lower numbers appear first. Commands without an explicit order fall back to
+  declaration order in the parent.
+  """
+  defmacro display_order(n), do: quote(do: @cheer_display_order(unquote(n)))
+
+  @doc """
   Declare a named trailing variable argument.
 
   Everything after the last declared positional (or after `--`) is collected
@@ -79,6 +87,7 @@ defmodule Cheer.Command.DSL do
     * `:long_help` - extended help text shown by `--help` (long form)
     * `:value_name` - placeholder name in help (e.g. `"FILE"`)
     * `:hide` - `true` to hide from help output
+    * `:display_order` - integer controlling position in help (lower first)
     * `:validate` - `fn value -> :ok | {:error, msg} end`
   """
   defmacro argument(name, opts \\ []) do
@@ -117,6 +126,8 @@ defmodule Cheer.Command.DSL do
     * `:hide` - `true` to hide from help output
     * `:global` - `true` to propagate to all subcommands
     * `:aliases` - list of alternative long names (e.g. `[:colour]` for `:color`)
+    * `:display_order` - integer controlling position within its help section (lower first)
+    * `:help_heading` - string; options sharing a heading are grouped under it in help
     * `:validate` - `fn value -> :ok | {:error, msg} end`
 
   Boolean options automatically support `--no-<name>` negation (e.g. `--no-color`).

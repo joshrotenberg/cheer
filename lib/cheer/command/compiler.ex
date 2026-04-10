@@ -15,6 +15,7 @@ defmodule Cheer.Command.Compiler do
     usage = Module.get_attribute(env.module, :cheer_usage)
     subcommand_required = Module.get_attribute(env.module, :cheer_subcommand_required) || false
     propagate_version = Module.get_attribute(env.module, :cheer_propagate_version) || false
+    display_order = Module.get_attribute(env.module, :cheer_display_order)
     trailing_var_arg = Module.get_attribute(env.module, :cheer_trailing_var_arg)
     arguments = Module.get_attribute(env.module, :cheer_arguments) |> Enum.reverse()
     options = Module.get_attribute(env.module, :cheer_options) |> Enum.reverse()
@@ -92,6 +93,7 @@ defmodule Cheer.Command.Compiler do
           usage: unquote(usage),
           subcommand_required: unquote(subcommand_required),
           propagate_version: unquote(propagate_version),
+          display_order: unquote(display_order),
           trailing_var_arg: unquote(Macro.escape(trailing_var_arg)),
           arguments: unquote(arguments_expr),
           options: unquote(options_expr),
