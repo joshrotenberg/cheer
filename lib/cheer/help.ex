@@ -47,10 +47,12 @@ defmodule Cheer.Help do
     end
 
     visible_subcommands =
-      Enum.reject(meta.subcommands, fn sub ->
+      meta.subcommands
+      |> Enum.reject(fn sub ->
         sub_meta = sub.__cheer_meta__()
         Map.get(sub_meta, :hide, false)
       end)
+      |> sort_subcommands()
 
     if visible_subcommands != [] do
       IO.puts("COMMANDS:")
@@ -66,9 +68,11 @@ defmodule Cheer.Help do
     end
 
     visible_arguments =
-      Enum.reject(meta.arguments, fn {_name, arg_opts} ->
+      meta.arguments
+      |> Enum.reject(fn {_name, arg_opts} ->
         Keyword.get(arg_opts, :hide, false)
       end)
+      |> sort_by_display_order()
 
     has_trailing = meta[:trailing_var_arg] != nil
 
@@ -111,70 +115,19 @@ defmodule Cheer.Help do
       end)
 
     if visible_options != [] do
-      IO.puts("OPTIONS:")
+      {default_section, headed_sections} = group_options_by_heading(visible_options)
 
-      for {name, opt_opts} <- visible_options do
-        short =
-          if Keyword.has_key?(opt_opts, :short),
-            do: "-#{Keyword.get(opt_opts, :short)}, ",
-            else: "    "
-
-        help = pick_help(opt_opts, long)
-
-        type = Keyword.get(opt_opts, :type, :string)
-
-        flag_name =
-          if type == :boolean, do: "[no-]#{name}", else: to_string(name)
-
-        opt_aliases = Keyword.get(opt_opts, :aliases, [])
-
-        flag_name =
-          if opt_aliases != [] do
-            alias_str = Enum.map_join(opt_aliases, ", ", &"--#{&1}")
-            "#{flag_name} (#{alias_str})"
-          else
-            flag_name
-          end
-
-        value_suffix =
-          case Keyword.get(opt_opts, :value_name) do
-            nil -> ""
-            vn -> " <#{vn}>"
-          end
-
-        suffixes =
-          []
-          |> maybe_append(Keyword.get(opt_opts, :choices), fn choices ->
-            "[choices: #{Enum.join(choices, ", ")}]"
-          end)
-          |> maybe_append(Keyword.get(opt_opts, :default), fn default ->
-            "[default: #{default}]"
-          end)
-          |> maybe_append(Keyword.get(opt_opts, :env), fn env ->
-            "[env: #{env}]"
-          end)
-
-        suffixes =
-          if type == :count, do: suffixes ++ ["(repeatable)"], else: suffixes
-
-        suffixes =
-          if Keyword.get(opt_opts, :multi, false),
-            do: suffixes ++ ["(multiple)"],
-            else: suffixes
-
-        suffixes =
-          if Keyword.get(opt_opts, :global, false),
-            do: suffixes ++ ["(global)"],
-            else: suffixes
-
-        suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
-
-        IO.puts(
-          "  #{short}--#{String.pad_trailing(flag_name <> value_suffix, 16)} #{help}#{suffix}"
-        )
+      if default_section != [] do
+        IO.puts("OPTIONS:")
+        for opt <- default_section, do: IO.puts(format_option(opt, long))
+        IO.puts("")
       end
 
-      IO.puts("")
+      for {heading, opts_in_heading} <- headed_sections do
+        IO.puts("#{String.upcase(heading)}:")
+        for opt <- opts_in_heading, do: IO.puts(format_option(opt, long))
+        IO.puts("")
+      end
     end
 
     groups = Map.get(meta, :groups, %{})
@@ -216,6 +169,103 @@ defmodule Cheer.Help do
 
   defp maybe_append(list, nil, _fun), do: list
   defp maybe_append(list, value, fun), do: list ++ [fun.(value)]
+
+  defp sort_by_display_order(items) do
+    items
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {{_name, opts}, idx} ->
+      {Keyword.get(opts, :display_order) || 1_000_000, idx}
+    end)
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  defp sort_subcommands(subs) do
+    subs
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {sub, idx} ->
+      order = Map.get(sub.__cheer_meta__(), :display_order) || 1_000_000
+      {order, idx}
+    end)
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  defp group_options_by_heading(options) do
+    {defaults, headed} =
+      Enum.split_with(options, fn {_, opts} -> is_nil(Keyword.get(opts, :help_heading)) end)
+
+    sorted_defaults = sort_by_display_order(defaults)
+
+    # Preserve first-appearance order of headings, then sort within each.
+    {heading_order, grouped} =
+      Enum.reduce(headed, {[], %{}}, fn {_, opts} = item, {order, acc} ->
+        heading = Keyword.get(opts, :help_heading)
+        new_order = if heading in order, do: order, else: order ++ [heading]
+        new_acc = Map.update(acc, heading, [item], fn existing -> existing ++ [item] end)
+        {new_order, new_acc}
+      end)
+
+    headed_sections =
+      Enum.map(heading_order, fn heading ->
+        {heading, sort_by_display_order(grouped[heading])}
+      end)
+
+    {sorted_defaults, headed_sections}
+  end
+
+  defp format_option({name, opt_opts}, long) do
+    short =
+      if Keyword.has_key?(opt_opts, :short),
+        do: "-#{Keyword.get(opt_opts, :short)}, ",
+        else: "    "
+
+    help = pick_help(opt_opts, long)
+    type = Keyword.get(opt_opts, :type, :string)
+
+    base_flag = if type == :boolean, do: "[no-]#{name}", else: to_string(name)
+    opt_aliases = Keyword.get(opt_opts, :aliases, [])
+
+    flag_name =
+      if opt_aliases != [] do
+        alias_str = Enum.map_join(opt_aliases, ", ", &"--#{&1}")
+        "#{base_flag} (#{alias_str})"
+      else
+        base_flag
+      end
+
+    value_suffix =
+      case Keyword.get(opt_opts, :value_name) do
+        nil -> ""
+        vn -> " <#{vn}>"
+      end
+
+    suffixes =
+      []
+      |> maybe_append(Keyword.get(opt_opts, :choices), fn choices ->
+        "[choices: #{Enum.join(choices, ", ")}]"
+      end)
+      |> maybe_append(Keyword.get(opt_opts, :default), fn default ->
+        "[default: #{default}]"
+      end)
+      |> maybe_append(Keyword.get(opt_opts, :env), fn env ->
+        "[env: #{env}]"
+      end)
+
+    suffixes = if type == :count, do: suffixes ++ ["(repeatable)"], else: suffixes
+
+    suffixes =
+      if Keyword.get(opt_opts, :multi, false),
+        do: suffixes ++ ["(multiple)"],
+        else: suffixes
+
+    suffixes =
+      if Keyword.get(opt_opts, :global, false),
+        do: suffixes ++ ["(global)"],
+        else: suffixes
+
+    suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
+
+    "  #{short}--#{String.pad_trailing(flag_name <> value_suffix, 16)} #{help}#{suffix}"
+  end
 
   defp format_usage(meta, prog) do
     parts = ["Usage: #{prog}"]

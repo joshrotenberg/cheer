@@ -1421,4 +1421,184 @@ defmodule CheerTest do
                Cheer.run(TestTrailingRequired, ["a.txt", "b.txt"])
     end
   end
+
+  # -- display_order and help_heading -----------------------------------------
+
+  defmodule TestDisplayOrderOpts do
+    use Cheer.Command
+
+    command "ordered" do
+      about("Options with display_order")
+
+      option(:zulu, type: :string, help: "Z opt", display_order: 1)
+      option(:alpha, type: :string, help: "A opt", display_order: 2)
+      option(:middle, type: :string, help: "M opt")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestDisplayOrderArgs do
+    use Cheer.Command
+
+    command "ordered-args" do
+      about("Arguments with display_order")
+
+      argument(:second, type: :string, help: "Shown second", display_order: 2)
+      argument(:first, type: :string, help: "Shown first", display_order: 1)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestSubAlpha do
+    use Cheer.Command
+
+    command "alpha" do
+      about("Alpha sub")
+      display_order(2)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestSubBeta do
+    use Cheer.Command
+
+    command "beta" do
+      about("Beta sub")
+      display_order(1)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestSubGamma do
+    use Cheer.Command
+
+    command "gamma" do
+      about("Gamma sub")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestDisplayOrderSubs do
+    use Cheer.Command
+
+    command "router" do
+      about("Subcommands with display_order")
+
+      subcommand(CheerTest.TestSubAlpha)
+      subcommand(CheerTest.TestSubBeta)
+      subcommand(CheerTest.TestSubGamma)
+    end
+  end
+
+  defmodule TestHelpHeading do
+    use Cheer.Command
+
+    command "headed" do
+      about("Options with custom headings")
+
+      option(:host, type: :string, help: "Hostname", help_heading: "Network")
+      option(:port, type: :integer, help: "Port", help_heading: "Network")
+      option(:user, type: :string, help: "Username", help_heading: "Auth")
+      option(:password, type: :string, help: "Password", help_heading: "Auth")
+      option(:verbose, type: :boolean, help: "Be verbose")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestHeadingWithOrder do
+    use Cheer.Command
+
+    command "headed-ordered" do
+      about("Mixed headings and display_order")
+
+      option(:b_opt, type: :string, help: "B", help_heading: "Net", display_order: 2)
+      option(:a_opt, type: :string, help: "A", help_heading: "Net", display_order: 1)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "display_order for options" do
+    test "options sorted by display_order, unordered fall back to declaration order" do
+      output = capture_io(fn -> Cheer.run(TestDisplayOrderOpts, ["--help"]) end)
+      zulu_pos = :binary.match(output, "--zulu") |> elem(0)
+      alpha_pos = :binary.match(output, "--alpha") |> elem(0)
+      middle_pos = :binary.match(output, "--middle") |> elem(0)
+      assert zulu_pos < alpha_pos
+      assert alpha_pos < middle_pos
+    end
+  end
+
+  describe "display_order for arguments" do
+    test "arguments are reordered in help" do
+      output = capture_io(fn -> Cheer.run(TestDisplayOrderArgs, ["--help"]) end)
+      first_pos = :binary.match(output, "<first>") |> elem(0)
+      second_pos = :binary.match(output, "<second>") |> elem(0)
+      assert first_pos < second_pos
+    end
+  end
+
+  describe "display_order for subcommands" do
+    test "subcommands sorted by their declared display_order" do
+      output = capture_io(fn -> Cheer.run(TestDisplayOrderSubs, ["--help"]) end)
+      beta_pos = :binary.match(output, "beta") |> elem(0)
+      alpha_pos = :binary.match(output, "alpha") |> elem(0)
+      gamma_pos = :binary.match(output, "gamma") |> elem(0)
+      assert beta_pos < alpha_pos
+      assert alpha_pos < gamma_pos
+    end
+  end
+
+  describe "help_heading for options" do
+    test "options grouped under custom headings" do
+      output = capture_io(fn -> Cheer.run(TestHelpHeading, ["--help"]) end)
+      assert output =~ "OPTIONS:"
+      assert output =~ "NETWORK:"
+      assert output =~ "AUTH:"
+    end
+
+    test "default section appears before custom heading sections" do
+      output = capture_io(fn -> Cheer.run(TestHelpHeading, ["--help"]) end)
+      options_pos = :binary.match(output, "OPTIONS:") |> elem(0)
+      network_pos = :binary.match(output, "NETWORK:") |> elem(0)
+      assert options_pos < network_pos
+    end
+
+    test "first-appearance order of headings is preserved" do
+      output = capture_io(fn -> Cheer.run(TestHelpHeading, ["--help"]) end)
+      network_pos = :binary.match(output, "NETWORK:") |> elem(0)
+      auth_pos = :binary.match(output, "AUTH:") |> elem(0)
+      assert network_pos < auth_pos
+    end
+
+    test "options under a heading are listed under it (not in default)" do
+      output = capture_io(fn -> Cheer.run(TestHelpHeading, ["--help"]) end)
+      # --host should appear after NETWORK: and before AUTH:
+      network_pos = :binary.match(output, "NETWORK:") |> elem(0)
+      host_pos = :binary.match(output, "--host") |> elem(0)
+      auth_pos = :binary.match(output, "AUTH:") |> elem(0)
+      assert network_pos < host_pos
+      assert host_pos < auth_pos
+    end
+
+    test "display_order applies within a heading section" do
+      output = capture_io(fn -> Cheer.run(TestHeadingWithOrder, ["--help"]) end)
+      a_pos = :binary.match(output, "--a_opt") |> elem(0)
+      b_pos = :binary.match(output, "--b_opt") |> elem(0)
+      assert a_pos < b_pos
+    end
+  end
 end
