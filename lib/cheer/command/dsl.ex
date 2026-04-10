@@ -49,6 +49,16 @@ defmodule Cheer.Command.DSL do
   defmacro propagate_version(val), do: quote(do: @cheer_propagate_version(unquote(val)))
 
   @doc """
+  Allow matching subcommands from unambiguous name prefixes.
+
+  When enabled, `che` will resolve to `checkout` if no other subcommand starts
+  with `che`. Ambiguous prefixes produce an error listing the candidates.
+  Exact matches always take precedence over prefix inference. Matching is
+  done against canonical names only -- aliases are not prefix-matched.
+  """
+  defmacro infer_subcommands(val), do: quote(do: @cheer_infer_subcommands(unquote(val)))
+
+  @doc """
   Set this command's display order as a subcommand in its parent's help output.
 
   Lower numbers appear first. Commands without an explicit order fall back to

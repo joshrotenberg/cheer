@@ -57,13 +57,16 @@ defmodule Cheer.Router do
 
     # If the first token matches a subcommand, dispatch to it before checking
     # flags. This ensures `tool sub --help` shows the subcommand's help.
+    infer? = Map.get(meta, :infer_subcommands, false)
+
     first_is_subcommand =
       case argv do
         [token | _] ->
-          Enum.any?(meta.subcommands, fn sub ->
-            sub_meta = sub.__cheer_meta__()
-            sub_meta.name == token or token in Map.get(sub_meta, :aliases, [])
-          end)
+          case match_subcommand(meta.subcommands, [token], infer?) do
+            {:ok, _, _} -> true
+            {:ambiguous, _, _} -> true
+            _ -> false
+          end
 
         _ ->
           false
@@ -95,10 +98,15 @@ defmodule Cheer.Router do
 
   defp resolve_help(command, [token | rest], opts) do
     meta = command.__cheer_meta__()
+    infer? = Map.get(meta, :infer_subcommands, false)
 
-    case match_subcommand(meta.subcommands, [token]) do
+    case match_subcommand(meta.subcommands, [token], infer?) do
       {:ok, sub_module, _} ->
         resolve_help(sub_module, rest, opts)
+
+      {:ambiguous, t, candidates} ->
+        print_ambiguous_subcommand(t, candidates)
+        :ok
 
       _ ->
         IO.puts("error: unknown command '#{token}'")
@@ -107,9 +115,14 @@ defmodule Cheer.Router do
   end
 
   defp dispatch_command(command, meta, argv, opts, hooks) do
-    case match_subcommand(meta.subcommands, argv) do
+    infer? = Map.get(meta, :infer_subcommands, false)
+
+    case match_subcommand(meta.subcommands, argv, infer?) do
       {:ok, sub_module, rest} ->
         dispatch_with_hooks(sub_module, rest, opts, hooks)
+
+      {:ambiguous, token, candidates} ->
+        print_ambiguous_subcommand(token, candidates)
 
       {:error, unknown_token} ->
         print_unknown_command(meta, unknown_token)
@@ -404,33 +417,58 @@ defmodule Cheer.Router do
 
   # -- Subcommand matching --
 
-  defp match_subcommand([], _argv), do: :none
+  defp match_subcommand([], _argv, _infer?), do: :none
+  defp match_subcommand(_subcommands, [], _infer?), do: :none
 
-  defp match_subcommand(subcommands, [token | rest]) do
-    found =
-      Enum.find_value(subcommands, nil, fn sub_module ->
+  defp match_subcommand(subcommands, [token | rest], infer?) do
+    exact =
+      Enum.find(subcommands, fn sub_module ->
         sub_meta = sub_module.__cheer_meta__()
-        cmd_aliases = Map.get(sub_meta, :aliases, [])
-
-        if sub_meta.name == token or token in cmd_aliases do
-          {:ok, sub_module, rest}
-        end
+        sub_meta.name == token or token in Map.get(sub_meta, :aliases, [])
       end)
 
-    case found do
-      {:ok, _, _} = match ->
-        match
+    cond do
+      exact != nil ->
+        {:ok, exact, rest}
 
-      nil ->
-        if String.starts_with?(token, "-") do
-          :none
-        else
-          {:error, token}
-        end
+      String.starts_with?(token, "-") ->
+        :none
+
+      infer? ->
+        infer_subcommand(subcommands, token, rest)
+
+      true ->
+        {:error, token}
     end
   end
 
-  defp match_subcommand(_subcommands, []), do: :none
+  defp infer_subcommand(subcommands, token, rest) do
+    candidates =
+      Enum.filter(subcommands, fn sub ->
+        String.starts_with?(sub.__cheer_meta__().name, token)
+      end)
+
+    case candidates do
+      [single] ->
+        {:ok, single, rest}
+
+      [] ->
+        {:error, token}
+
+      many ->
+        names =
+          many
+          |> Enum.map(& &1.__cheer_meta__().name)
+          |> Enum.sort()
+
+        {:ambiguous, token, names}
+    end
+  end
+
+  defp print_ambiguous_subcommand(token, candidates) do
+    IO.puts("error: '#{token}' is ambiguous")
+    IO.puts("candidates: #{Enum.join(candidates, ", ")}")
+  end
 
   # -- OptionParser spec --
 
