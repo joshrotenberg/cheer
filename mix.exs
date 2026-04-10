@@ -22,9 +22,15 @@ defmodule Cheer.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :ex_unit]
+      extra_applications: extra_applications(Mix.env())
     ]
   end
+
+  # ExUnit is referenced by Cheer.Test (an in-process test helper) and is needed
+  # at dev/test time so dialyzer can resolve ExUnit.CaptureIO. Production
+  # releases must not bundle or start :ex_unit.
+  defp extra_applications(:prod), do: [:logger]
+  defp extra_applications(_), do: [:logger, :ex_unit]
 
   defp deps do
     [
