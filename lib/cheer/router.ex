@@ -231,7 +231,9 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with :ok <- validate_groups(args, Map.get(meta, :groups, %{})),
+          with :ok <- validate_conditional_required(args, all_options),
+               :ok <- validate_constraints(args, all_options),
+               :ok <- validate_groups(args, Map.get(meta, :groups, %{})),
                :ok <- validate_params(args, all_options),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
@@ -263,6 +265,109 @@ defmodule Cheer.Router do
     end)
     |> Enum.map(fn {name, _o} -> name end)
   end
+
+  # -- Conditional required (required_if / required_unless) --
+
+  defp validate_conditional_required(args, options) do
+    Enum.reduce_while(options, :ok, fn {name, opts}, _acc ->
+      if Map.has_key?(args, name) do
+        {:cont, :ok}
+      else
+        check_conditional_required(name, opts, args)
+      end
+    end)
+  end
+
+  defp check_conditional_required(name, opts, args) do
+    cond do
+      Keyword.has_key?(opts, :required_if) ->
+        case match_required_if(Keyword.fetch!(opts, :required_if), args) do
+          {:match, dep, val} ->
+            {:halt,
+             {:error, "--#{name} is required when --#{dep} is #{format_required_value(val)}"}}
+
+          :no_match ->
+            {:cont, :ok}
+        end
+
+      Keyword.has_key?(opts, :required_unless) ->
+        deps = Keyword.fetch!(opts, :required_unless)
+
+        if any_present?(deps, args) do
+          {:cont, :ok}
+        else
+          {:halt, {:error, "--#{name} is required unless #{format_dep_list(deps)} is provided"}}
+        end
+
+      true ->
+        {:cont, :ok}
+    end
+  end
+
+  defp match_required_if(checks, args) when is_list(checks) do
+    Enum.find_value(checks, :no_match, fn {dep, expected} ->
+      case Map.fetch(args, dep) do
+        {:ok, ^expected} -> {:match, dep, expected}
+        _ -> nil
+      end
+    end)
+  end
+
+  defp any_present?(name, args) when is_atom(name), do: Map.has_key?(args, name)
+
+  defp any_present?(names, args) when is_list(names),
+    do: Enum.any?(names, &Map.has_key?(args, &1))
+
+  defp format_dep_list(name) when is_atom(name), do: "--#{name}"
+
+  defp format_dep_list(names) when is_list(names),
+    do: Enum.map_join(names, ", ", &"--#{&1}")
+
+  defp format_required_value(val) when is_binary(val), do: "'#{val}'"
+  defp format_required_value(val), do: inspect(val)
+
+  # -- Per-option constraints (conflicts_with / requires) --
+
+  defp validate_constraints(args, options) do
+    Enum.reduce_while(options, :ok, fn {name, opts}, _acc ->
+      if Map.has_key?(args, name) do
+        check_constraints(name, opts, args)
+      else
+        {:cont, :ok}
+      end
+    end)
+  end
+
+  defp check_constraints(name, opts, args) do
+    with :ok <- check_conflicts(name, opts, args),
+         :ok <- check_requires(name, opts, args) do
+      {:cont, :ok}
+    else
+      err -> {:halt, err}
+    end
+  end
+
+  defp check_conflicts(name, opts, args) do
+    conflicts = list_of(Keyword.get(opts, :conflicts_with))
+
+    case Enum.find(conflicts, &Map.has_key?(args, &1)) do
+      nil -> :ok
+      other -> {:error, "--#{name} cannot be used with --#{other}"}
+    end
+  end
+
+  defp check_requires(name, opts, args) do
+    requires = list_of(Keyword.get(opts, :requires))
+
+    case Enum.find(requires, &(not Map.has_key?(args, &1))) do
+      nil -> :ok
+      other -> {:error, "--#{name} requires --#{other}"}
+    end
+  end
+
+  defp list_of(nil), do: []
+  defp list_of(atom) when is_atom(atom), do: [atom]
+  defp list_of(list) when is_list(list), do: list
 
   # -- Groups validation --
 
