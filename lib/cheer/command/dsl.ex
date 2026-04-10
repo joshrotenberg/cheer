@@ -36,7 +36,7 @@ defmodule Cheer.Command.DSL do
   @doc "Set text displayed after the auto-generated help."
   defmacro after_help(text), do: quote(do: @cheer_after_help(unquote(text)))
 
-  @doc "Set subcommand aliases (e.g. `aliases [\"co\", \"ck\"]` for `checkout`)."
+  @doc ~s|Set subcommand aliases (e.g. `aliases ["co", "ck"]` for `checkout`).|
   defmacro aliases(list), do: quote(do: @cheer_aliases(unquote(list)))
 
   @doc "Override the auto-generated usage line in help output."

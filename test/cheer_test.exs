@@ -448,7 +448,7 @@ defmodule CheerTest do
         type: :integer,
         required: true,
         validate: fn val ->
-          if val in 1024..65535, do: :ok, else: {:error, "port must be 1024-65535"}
+          if val in 1024..65_535, do: :ok, else: {:error, "port must be 1024-65535"}
         end,
         help: "Port number"
       )
