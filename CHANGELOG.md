@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.4](https://github.com/joshrotenberg/cheer/compare/v0.1.3...v0.1.4) (2026-04-10)
+
+
+### Features
+
+* add display_order and help_heading ([#32](https://github.com/joshrotenberg/cheer/issues/32)) ([5ac1e82](https://github.com/joshrotenberg/cheer/commit/5ac1e825ed531e12d3ff1439dd14e3eb031de2b4))
+* infer subcommands from unique prefixes ([#34](https://github.com/joshrotenberg/cheer/issues/34)) ([90d456f](https://github.com/joshrotenberg/cheer/commit/90d456fd2279c91c76a3c35a321064bd136d7013))
+* per-option constraints and conditional required ([#35](https://github.com/joshrotenberg/cheer/issues/35)) ([c70fbb3](https://github.com/joshrotenberg/cheer/commit/c70fbb316d35a4f590e2a4c3e255e2dd25dd089e)), closes [#19](https://github.com/joshrotenberg/cheer/issues/19) [#18](https://github.com/joshrotenberg/cheer/issues/18)
+
 ## [0.1.3](https://github.com/joshrotenberg/cheer/compare/v0.1.2...v0.1.3) (2026-04-05)
 
 
