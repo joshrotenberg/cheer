@@ -38,6 +38,20 @@ defmodule Cheer.Command.Compiler do
       end
     end
 
+    # Validate: version/1 called with an empty string is almost always a
+    # mistake -- a common footgun is `version(Application.spec(:my_app,
+    # :vsn) |> to_string())`, which evaluates at compile time before the
+    # .app file exists and collapses to `""`. Use `Mix.Project.config()
+    # [:version]` instead, which is always available while compiling.
+    if version == "" do
+      IO.warn(
+        "#{inspect(env.module)} called `version(\"\")`. Empty version string " <>
+          "is almost always unintended. If you meant to read the version " <>
+          "from mix.exs, try `Mix.Project.config()[:version]`.",
+        Macro.Env.stacktrace(env)
+      )
+    end
+
     # Build groups map: %{group_name => %{opts: [...], members: [...]}}
     groups = build_groups(raw_groups)
 

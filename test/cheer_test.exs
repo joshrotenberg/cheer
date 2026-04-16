@@ -271,6 +271,41 @@ defmodule CheerTest do
     end
   end
 
+  describe "option flag rendering" do
+    defmodule TestUnderscoreOption do
+      use Cheer.Command
+
+      command "under" do
+        about("Underscore option names")
+        option(:base_port, type: :integer, help: "Starting port")
+        option(:replicas_per_master, type: :integer, help: "Replicas")
+      end
+
+      @impl Cheer.Command
+      def run(args, _raw), do: {:ok, args}
+    end
+
+    test "help renders atom option names as kebab-case, matching the parser" do
+      output = capture_io(fn -> Cheer.run(TestUnderscoreOption, ["--help"]) end)
+      # The parser accepts --base-port (OptionParser kebab-case convention);
+      # help has to show the same form so users type what they read.
+      assert output =~ "--base-port"
+      assert output =~ "--replicas-per-master"
+      refute output =~ "--base_port"
+      refute output =~ "--replicas_per_master"
+    end
+
+    test "the rendered flag is accepted by the parser" do
+      output =
+        capture_io(fn ->
+          Cheer.run(TestUnderscoreOption, ["--base-port", "17500"])
+        end)
+
+      # No "unknown option(s)" error means the flag parsed.
+      refute output =~ "unknown option"
+    end
+  end
+
   # -- 5. Unknown subcommand error messages -----------------------------------
 
   describe "unknown subcommand error" do
@@ -1616,8 +1651,8 @@ defmodule CheerTest do
 
     test "display_order applies within a heading section" do
       output = capture_io(fn -> Cheer.run(TestHeadingWithOrder, ["--help"]) end)
-      a_pos = :binary.match(output, "--a_opt") |> elem(0)
-      b_pos = :binary.match(output, "--b_opt") |> elem(0)
+      a_pos = :binary.match(output, "--a-opt") |> elem(0)
+      b_pos = :binary.match(output, "--b-opt") |> elem(0)
       assert a_pos < b_pos
     end
 

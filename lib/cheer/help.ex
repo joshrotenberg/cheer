@@ -141,7 +141,10 @@ defmodule Cheer.Help do
             true -> ""
           end
 
-        IO.puts("  [#{group_name}] (#{constraint}): #{Enum.map_join(members, ", ", &"--#{&1}")}")
+        IO.puts(
+          "  [#{group_name}] (#{constraint}): " <>
+            Enum.map_join(members, ", ", &"--#{flag_from(&1)}")
+        )
       end
 
       IO.puts("")
@@ -221,12 +224,16 @@ defmodule Cheer.Help do
     help = pick_help(opt_opts, long)
     type = Keyword.get(opt_opts, :type, :string)
 
-    base_flag = if type == :boolean, do: "[no-]#{name}", else: to_string(name)
+    base_flag =
+      if type == :boolean,
+        do: "[no-]#{flag_from(name)}",
+        else: flag_from(name)
+
     opt_aliases = Keyword.get(opt_opts, :aliases, [])
 
     flag_name =
       if opt_aliases != [] do
-        alias_str = Enum.map_join(opt_aliases, ", ", &"--#{&1}")
+        alias_str = Enum.map_join(opt_aliases, ", ", &"--#{flag_from(&1)}")
         "#{base_flag} (#{alias_str})"
       else
         base_flag
@@ -266,6 +273,13 @@ defmodule Cheer.Help do
 
     "  #{short}--#{String.pad_trailing(flag_name <> value_suffix, 16)} #{help}#{suffix}"
   end
+
+  # Render an option name as the long flag the parser accepts.
+  # `OptionParser` converts atoms to kebab-case (`:base_port` -> `--base-port`);
+  # help output has to match, otherwise users type what `--help` shows and
+  # get "unknown option".
+  defp flag_from(name) when is_atom(name), do: name |> Atom.to_string() |> flag_from()
+  defp flag_from(name) when is_binary(name), do: String.replace(name, "_", "-")
 
   defp format_usage(meta, prog) do
     parts = ["Usage: #{prog}"]
