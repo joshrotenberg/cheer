@@ -52,15 +52,37 @@ defmodule Cheer.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE)
+      files: ~w(lib docs .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
     ]
   end
 
   defp docs do
     [
-      main: "Cheer",
+      main: "getting_started",
       source_ref: "v#{@version}",
-      source_url: @source_url
+      source_url: @source_url,
+      extras: [
+        "docs/getting_started.md",
+        "docs/concepts.md",
+        "docs/guides/options.md",
+        "docs/guides/arguments.md",
+        "docs/guides/subcommands.md",
+        "docs/guides/validation.md",
+        "docs/guides/constraints.md",
+        "docs/guides/help_and_output.md",
+        "docs/guides/lifecycle_hooks.md",
+        "docs/guides/shell_completion.md",
+        "docs/guides/repl.md",
+        "docs/guides/testing.md",
+        "docs/cookbook/greeter.md",
+        "docs/cookbook/devtool.md",
+        "CHANGELOG.md"
+      ],
+      groups_for_extras: [
+        "Getting Started": ~r{^docs/(getting_started|concepts)\.md$},
+        Guides: ~r{^docs/guides/.*\.md$},
+        Cookbook: ~r{^docs/cookbook/.*\.md$}
+      ]
     ]
   end
 end
