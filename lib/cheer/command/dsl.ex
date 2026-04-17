@@ -59,6 +59,34 @@ defmodule Cheer.Command.DSL do
   defmacro infer_subcommands(val), do: quote(do: @cheer_infer_subcommands(unquote(val)))
 
   @doc """
+  Allow this command to accept unknown subcommands (e.g. plugins on `$PATH`).
+
+  When enabled, any argv token that does not match a declared subcommand and is
+  not an option is captured and surfaced to `run/2` via
+  `args[:external_subcommand]` as `{name, rest_argv}`. Declared subcommands
+  still take precedence. Commands that opt in should generally not also declare
+  positional arguments -- leftover positionals are routed to the external-sub
+  capture, not to arguments.
+
+  Example: a `git`-style plugin dispatcher that execs `git-<name>` from `$PATH`.
+
+      command "git-like" do
+        external_subcommands(true)
+
+        # ... declared subs, options ...
+      end
+
+      def run(args, _raw) do
+        case args[:external_subcommand] do
+          {name, rest} -> System.cmd("git-\#{name}", rest)
+          nil -> :ok
+        end
+      end
+  """
+  defmacro external_subcommands(val),
+    do: quote(do: @cheer_external_subcommands(unquote(val)))
+
+  @doc """
   Set this command's display order as a subcommand in its parent's help output.
 
   Lower numbers appear first. Commands without an explicit order fall back to
