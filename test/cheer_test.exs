@@ -984,9 +984,10 @@ defmodule CheerTest do
       assert args[:rest] == []
     end
 
-    test "help usage line shows [-- <args>...]" do
+    test "help usage line omits [-- <args>...] when no trailing_var_arg declared (#37)" do
       output = capture_io(fn -> Cheer.run(TestGreet, ["--help"]) end)
-      assert output =~ "[-- <args>...]"
+      refute output =~ "[-- <args>...]"
+      refute output =~ "-- <args>"
     end
   end
 
@@ -2034,6 +2035,62 @@ defmodule CheerTest do
     test "list form errors when none of the dependencies are present" do
       output = capture_io(fn -> Cheer.run(TestRequiredUnlessList, []) end)
       assert output =~ "error: --input is required unless --stdin, --url is provided"
+    end
+  end
+
+  # -- Subcommand usage line (#37) ---------------------------------------------
+
+  defmodule TestSubUsageLeaf do
+    use Cheer.Command
+
+    command "info" do
+      about("Show detailed info for one instance")
+      argument(:name, type: :string, required: true, help: "Instance name")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestSubUsageRoot do
+    use Cheer.Command
+
+    command "demo" do
+      about("Demo root")
+      subcommand(TestSubUsageLeaf)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "subcommand usage line (#37)" do
+    test "missing-arg error shows full subcommand path in usage" do
+      output = capture_io(fn -> Cheer.run(TestSubUsageRoot, ["info"]) end)
+      assert output =~ "error: missing required argument(s): <name>"
+      assert output =~ "Usage: demo info <name>"
+    end
+
+    test "subcommand --help shows full subcommand path in usage" do
+      output = capture_io(fn -> Cheer.run(TestSubUsageRoot, ["info", "--help"]) end)
+      assert output =~ "Usage: demo info <name>"
+    end
+
+    test "help <sub> also shows full subcommand path" do
+      output = capture_io(fn -> Cheer.run(TestSubUsageRoot, ["help", "info"]) end)
+      assert output =~ "Usage: demo info <name>"
+    end
+
+    test "caller-supplied :prog is extended, not replaced" do
+      output =
+        capture_io(fn -> Cheer.run(TestSubUsageRoot, ["info", "--help"], prog: "my-app") end)
+
+      assert output =~ "Usage: my-app info <name>"
+    end
+
+    test "subcommand usage does not append bogus [-- <args>...]" do
+      output = capture_io(fn -> Cheer.run(TestSubUsageRoot, ["info", "--help"]) end)
+      refute output =~ "[-- <args>...]"
     end
   end
 end

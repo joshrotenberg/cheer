@@ -28,6 +28,14 @@ defmodule Cheer.Router do
   defp dispatch_with_hooks(command, argv, opts, parent_hooks) do
     meta = command.__cheer_meta__()
 
+    # Resolve prog so help/usage output reflects the full subcommand path.
+    # First entry: default to the root command's name if caller didn't set one.
+    opts =
+      case Keyword.get(opts, :prog) do
+        nil -> Keyword.put(opts, :prog, meta.name)
+        _ -> opts
+      end
+
     # Propagate version from parent if enabled
     meta =
       if meta.version == nil and Keyword.has_key?(opts, :propagated_version) do
@@ -102,7 +110,9 @@ defmodule Cheer.Router do
 
     case match_subcommand(meta.subcommands, [token], infer?) do
       {:ok, sub_module, _} ->
-        resolve_help(sub_module, rest, opts)
+        sub_name = sub_module.__cheer_meta__().name
+        child_opts = Keyword.update(opts, :prog, sub_name, &"#{&1} #{sub_name}")
+        resolve_help(sub_module, rest, child_opts)
 
       {:ambiguous, t, candidates} ->
         print_ambiguous_subcommand(t, candidates)
@@ -119,7 +129,9 @@ defmodule Cheer.Router do
 
     case match_subcommand(meta.subcommands, argv, infer?) do
       {:ok, sub_module, rest} ->
-        dispatch_with_hooks(sub_module, rest, opts, hooks)
+        sub_name = sub_module.__cheer_meta__().name
+        child_opts = Keyword.update!(opts, :prog, &"#{&1} #{sub_name}")
+        dispatch_with_hooks(sub_module, rest, child_opts, hooks)
 
       {:ambiguous, token, candidates} ->
         print_ambiguous_subcommand(token, candidates)
