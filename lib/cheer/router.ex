@@ -126,6 +126,7 @@ defmodule Cheer.Router do
 
   defp dispatch_command(command, meta, argv, opts, hooks) do
     infer? = Map.get(meta, :infer_subcommands, false)
+    external? = Map.get(meta, :external_subcommands, false)
 
     case match_subcommand(meta.subcommands, argv, infer?) do
       {:ok, sub_module, rest} ->
@@ -136,6 +137,9 @@ defmodule Cheer.Router do
       {:ambiguous, token, candidates} ->
         print_ambiguous_subcommand(token, candidates)
 
+      {:error, _unknown_token} when external? ->
+        run_leaf(command, meta, argv, opts, hooks)
+
       {:error, unknown_token} ->
         print_unknown_command(meta, unknown_token)
 
@@ -144,24 +148,31 @@ defmodule Cheer.Router do
         IO.puts("")
         Cheer.Help.print(command, opts)
 
-      :none when meta.subcommands != [] ->
+      :none when meta.subcommands != [] and not external? ->
+        Cheer.Help.print(command, opts)
+
+      :none when meta.subcommands != [] and argv == [] ->
         Cheer.Help.print(command, opts)
 
       :none ->
-        case parse_and_validate(command, meta, argv, opts) do
-          {:ok, args} ->
-            # Apply persistent hooks from parents, then local before_run
-            args = apply_hooks(args, hooks)
-            args = apply_hooks(args, Map.get(meta, :before_run, []))
+        run_leaf(command, meta, argv, opts, hooks)
+    end
+  end
 
-            result = command.run(args, argv)
+  defp run_leaf(command, meta, argv, opts, hooks) do
+    case parse_and_validate(command, meta, argv, opts) do
+      {:ok, args} ->
+        # Apply persistent hooks from parents, then local before_run
+        args = apply_hooks(args, hooks)
+        args = apply_hooks(args, Map.get(meta, :before_run, []))
 
-            # Apply after_run hooks
-            apply_after_hooks(result, Map.get(meta, :after_run, []))
+        result = command.run(args, argv)
 
-          :handled ->
-            :ok
-        end
+        # Apply after_run hooks
+        apply_after_hooks(result, Map.get(meta, :after_run, []))
+
+      :handled ->
+        :ok
     end
   end
 
@@ -182,6 +193,14 @@ defmodule Cheer.Router do
   # -- Parsing pipeline --
 
   defp parse_and_validate(command, meta, argv, opts) do
+    if Map.get(meta, :external_subcommands, false) do
+      parse_with_external_subcommand(command, meta, argv, opts)
+    else
+      parse_standard(command, meta, argv, opts)
+    end
+  end
+
+  defp parse_standard(command, meta, argv, opts) do
     # Merge parent global options with this command's options
     parent_globals = Keyword.get(opts, :parent_globals, [])
 
@@ -236,6 +255,61 @@ defmodule Cheer.Router do
           _ ->
             missing
         end
+
+      cond do
+        missing != [] ->
+          print_missing_args_error(command, missing, opts)
+          :handled
+
+        true ->
+          with :ok <- validate_conditional_required(args, all_options),
+               :ok <- validate_constraints(args, all_options),
+               :ok <- validate_groups(args, Map.get(meta, :groups, %{})),
+               :ok <- validate_params(args, all_options),
+               :ok <- run_validators(args, Map.get(meta, :validators, [])) do
+            {:ok, args}
+          else
+            {:error, msg} ->
+              IO.puts("error: #{msg}")
+              :handled
+          end
+      end
+    end
+  end
+
+  # Parse path for commands with `external_subcommands: true`. Uses parse_head
+  # so the first non-option token (and everything after) is surfaced as the
+  # external subcommand rather than being treated as a parent positional or as
+  # an unknown-option error.
+  defp parse_with_external_subcommand(command, meta, argv, opts) do
+    parent_globals = Keyword.get(opts, :parent_globals, [])
+
+    inherited_globals =
+      Enum.reject(parent_globals, fn {name, _} ->
+        Enum.any?(meta.options, fn {n, _} -> n == name end)
+      end)
+
+    all_options = meta.options ++ inherited_globals
+    {option_parser_opts, option_aliases} = build_option_parser_spec(all_options)
+
+    {parsed, positional, invalid} =
+      OptionParser.parse_head(argv, strict: option_parser_opts, aliases: option_aliases)
+
+    if invalid != [] do
+      print_invalid_options_error(command, invalid, opts)
+      :handled
+    else
+      args = apply_defaults(all_options)
+      args = apply_env_vars(args, all_options)
+      args = Map.merge(args, build_parsed_map(parsed, all_options))
+
+      args =
+        case positional do
+          [] -> Map.put(args, :external_subcommand, nil)
+          [name | rest] -> Map.put(args, :external_subcommand, {name, rest})
+        end
+
+      missing = missing_required_options(all_options, args)
 
       cond do
         missing != [] ->

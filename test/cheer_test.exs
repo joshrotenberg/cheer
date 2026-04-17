@@ -2150,4 +2150,95 @@ defmodule CheerTest do
       refute output =~ "[-- <args>...]"
     end
   end
+
+  # -- external_subcommands (#25) ----------------------------------------------
+
+  defmodule TestExternalSub.Status do
+    use Cheer.Command
+
+    command "status" do
+      about("Show status")
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: {:ok, :status_ran}
+  end
+
+  defmodule TestExternalSub do
+    use Cheer.Command
+
+    command "git-like" do
+      about("A git-style plugin dispatcher")
+      external_subcommands(true)
+      option(:verbose, type: :boolean, short: :v, help: "Verbose output")
+      subcommand(TestExternalSub.Status)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestNoExternalSub do
+    use Cheer.Command
+
+    command "strict" do
+      about("Without external_subcommands")
+      subcommand(TestExternalSub.Status)
+    end
+  end
+
+  describe "external_subcommands (#25)" do
+    test "unknown token is captured under :external_subcommand as {name, rest}" do
+      assert {:ok, args} = Cheer.run(TestExternalSub, ["foo", "bar", "baz"])
+      assert args[:external_subcommand] == {"foo", ["bar", "baz"]}
+    end
+
+    test "unknown token with no trailing args gives empty rest" do
+      assert {:ok, args} = Cheer.run(TestExternalSub, ["foo"])
+      assert args[:external_subcommand] == {"foo", []}
+    end
+
+    test "declared subcommand takes precedence over external capture" do
+      assert {:ok, :status_ran} = Cheer.run(TestExternalSub, ["status"])
+    end
+
+    test "parent options parsed before the external token" do
+      assert {:ok, args} = Cheer.run(TestExternalSub, ["--verbose", "foo", "bar"])
+      assert args[:verbose] == true
+      assert args[:external_subcommand] == {"foo", ["bar"]}
+    end
+
+    test "tokens after the external name are passed through verbatim, including flags" do
+      assert {:ok, args} = Cheer.run(TestExternalSub, ["foo", "--unknown-flag", "value"])
+      assert args[:external_subcommand] == {"foo", ["--unknown-flag", "value"]}
+    end
+
+    test "short-option alias still resolves on the parent" do
+      assert {:ok, args} = Cheer.run(TestExternalSub, ["-v", "foo"])
+      assert args[:verbose] == true
+      assert args[:external_subcommand] == {"foo", []}
+    end
+
+    test "no external invocation sets :external_subcommand to nil" do
+      assert {:ok, args} = Cheer.run(TestExternalSub, ["--verbose"])
+      assert args[:verbose] == true
+      assert args[:external_subcommand] == nil
+    end
+
+    test "empty argv with subcommands declared still shows help" do
+      output = capture_io(fn -> Cheer.run(TestExternalSub, []) end)
+      assert output =~ "COMMANDS:"
+      assert output =~ "status"
+    end
+
+    test "invalid parent option before external name still errors" do
+      output = capture_io(fn -> Cheer.run(TestExternalSub, ["--nope", "foo"]) end)
+      assert output =~ "error: unknown option(s): --nope"
+    end
+
+    test "commands with subcommands and no external_subcommands still error on unknown tokens (regression)" do
+      output = capture_io(fn -> Cheer.run(TestNoExternalSub, ["surprise"]) end)
+      assert output =~ "error: unknown command 'surprise'"
+    end
+  end
 end
