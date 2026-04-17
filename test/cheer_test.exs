@@ -775,6 +775,63 @@ defmodule CheerTest do
       assert script =~ "--host"
       assert script =~ "-p"
     end
+
+    test "generates powershell completion (#23)" do
+      script = Cheer.Completion.generate(TestRoot, :powershell, prog: "myapp")
+      assert script =~ "Register-ArgumentCompleter -Native -CommandName 'myapp'"
+      assert script =~ "using namespace System.Management.Automation"
+      assert script =~ "'myapp' {"
+      assert script =~ "[CompletionResult]::new('greet'"
+      assert script =~ "[CompletionResultType]::ParameterValue"
+    end
+
+    test "powershell completion nests subcommands under semicolon-joined keys (#23)" do
+      script = Cheer.Completion.generate(TestRoot, :powershell, prog: "myapp")
+      assert script =~ "'myapp;greet' {"
+    end
+
+    test "powershell option flags appear at the right level (#23)" do
+      script = Cheer.Completion.generate(TestDefaults, :powershell, prog: "serve")
+      assert script =~ "'serve' {"
+      assert script =~ "[CompletionResult]::new('--port'"
+      assert script =~ "[CompletionResult]::new('--host'"
+      assert script =~ "[CompletionResultType]::ParameterName"
+    end
+
+    test "powershell flag names are kebab-cased to match the parser (#23)" do
+      defmodule TestPwshUnderscores do
+        use Cheer.Command
+
+        command "app" do
+          about("App")
+          option(:base_port, type: :integer, help: "Base port")
+        end
+
+        @impl Cheer.Command
+        def run(_args, _raw), do: :ok
+      end
+
+      script = Cheer.Completion.generate(TestPwshUnderscores, :powershell, prog: "app")
+      assert script =~ "'--base-port'"
+      refute script =~ "'--base_port'"
+    end
+
+    test "powershell completion escapes single quotes in help text (#23)" do
+      defmodule TestPwshQuotes do
+        use Cheer.Command
+
+        command "app" do
+          about("App")
+          option(:flag, type: :boolean, help: "Josh's flag")
+        end
+
+        @impl Cheer.Command
+        def run(_args, _raw), do: :ok
+      end
+
+      script = Cheer.Completion.generate(TestPwshQuotes, :powershell, prog: "app")
+      assert script =~ "'Josh''s flag'"
+    end
   end
 
   # -- REPL mode ---------------------------------------------------------------
