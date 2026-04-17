@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.5](https://github.com/joshrotenberg/cheer/compare/v0.1.4...v0.1.5) (2026-04-17)
+
+
+### Features
+
+* external_subcommands (plugin-style dispatchers) ([#44](https://github.com/joshrotenberg/cheer/issues/44)) ([8c35224](https://github.com/joshrotenberg/cheer/commit/8c35224d9a947fd7b487926614ab4ac7f19a4cbc))
+* PowerShell completion generation ([#43](https://github.com/joshrotenberg/cheer/issues/43)) ([5919b94](https://github.com/joshrotenberg/cheer/commit/5919b94e4d8f75dd093f80b3abd61fbd267f2d24))
+
+
+### Bug Fixes
+
+* include subcommand path in usage line, drop bogus [-- &lt;args&gt;...] ([#42](https://github.com/joshrotenberg/cheer/issues/42)) ([58017ea](https://github.com/joshrotenberg/cheer/commit/58017ea6ac1c648e1f056fc72f9ef6092d90a797))
+* render option names as kebab-case + warn on empty version ([#40](https://github.com/joshrotenberg/cheer/issues/40)) ([91cde25](https://github.com/joshrotenberg/cheer/commit/91cde255d8d6528b0f31da3a2203d1f376db28c9))
+
 ## [0.1.4](https://github.com/joshrotenberg/cheer/compare/v0.1.3...v0.1.4) (2026-04-10)
 
 
