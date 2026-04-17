@@ -309,21 +309,17 @@ defmodule Cheer.Help do
     parts = if meta.options != [], do: parts ++ ["[OPTIONS]"], else: parts
 
     parts =
-      if meta.subcommands == [] do
-        case meta[:trailing_var_arg] do
-          {tva_name, tva_opts} ->
-            label =
-              if Keyword.get(tva_opts, :required, false),
-                do: "<#{tva_name}>...",
-                else: "[#{tva_name}]..."
+      case meta[:trailing_var_arg] do
+        {tva_name, tva_opts} when meta.subcommands == [] ->
+          label =
+            if Keyword.get(tva_opts, :required, false),
+              do: "<#{tva_name}>...",
+              else: "[#{tva_name}]..."
 
-            parts ++ [label]
+          parts ++ [label]
 
-          _ ->
-            parts ++ ["[-- <args>...]"]
-        end
-      else
-        parts
+        _ ->
+          parts
       end
 
     Enum.join(parts, " ")
