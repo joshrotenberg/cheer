@@ -564,6 +564,70 @@ defmodule CheerTest do
     end
   end
 
+  # -- num_args / multi-value options (issue #27) ------------------------------
+
+  defmodule TestNumArgs do
+    use Cheer.Command
+
+    command "plot" do
+      about("num_args")
+
+      argument(:label, type: :string, required: false, help: "Label")
+      option(:point, type: :integer, num_args: 2, short: :p, help: "Two coords")
+      option(:tags, type: :string, num_args: 1..3, help: "One to three tags")
+      option(:verbose, type: :boolean, help: "Verbose")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "num_args (issue #27)" do
+    test "exact count collects and coerces values" do
+      assert {:ok, %{point: [1, 2]}} = Cheer.run(TestNumArgs, ["--point", "1", "2"])
+    end
+
+    test "exact count via short flag" do
+      assert {:ok, %{point: [1, 2]}} = Cheer.run(TestNumArgs, ["-p", "1", "2"])
+    end
+
+    test "too few values is a usage error" do
+      output = capture_io(fn -> Cheer.run(TestNumArgs, ["--point", "1"]) end)
+      assert output =~ "--point expects 2 value(s), got 1"
+    end
+
+    test "extra values beyond the max fall through to positionals" do
+      assert {:ok, %{point: [1, 2], label: "3"}} =
+               Cheer.run(TestNumArgs, ["--point", "1", "2", "3"])
+    end
+
+    test "range accepts a variable count" do
+      assert {:ok, %{tags: ["a"]}} = Cheer.run(TestNumArgs, ["--tags", "a"])
+      assert {:ok, %{tags: ["a", "b", "c"]}} = Cheer.run(TestNumArgs, ["--tags", "a", "b", "c"])
+    end
+
+    test "collection stops at the next flag" do
+      assert {:ok, %{tags: ["a"], verbose: true}} =
+               Cheer.run(TestNumArgs, ["--tags", "a", "--verbose"])
+    end
+
+    test "values do not leak into a declared positional" do
+      assert {:ok, %{point: [1, 2], label: "site"}} =
+               Cheer.run(TestNumArgs, ["site", "--point", "1", "2"])
+    end
+
+    test "--flag=value inline form yields a single value" do
+      output = capture_io(fn -> Cheer.run(TestNumArgs, ["--point=1"]) end)
+      assert output =~ "--point expects 2 value(s), got 1"
+    end
+
+    test "help labels the value count" do
+      output = capture_io(fn -> Cheer.run(TestNumArgs, ["--help"]) end)
+      assert output =~ "(2 values)"
+      assert output =~ "(1..3 values)"
+    end
+  end
+
   # -- Cross-param validation --------------------------------------------------
 
   defmodule TestCrossValidation do
