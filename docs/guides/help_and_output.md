@@ -94,6 +94,30 @@ Cheer converts atom option names to kebab-case in both the parser and help
 output. `:base_port` becomes `--base-port` everywhere. You do not need to
 match them by hand.
 
+## Exit codes
+
+`Cheer.run/3` returns the matched command's own `run/2` value on success. On a
+usage failure (unknown option, missing required argument, bad choice, unknown
+or ambiguous subcommand, missing required subcommand) it prints the error and
+returns `{:error, :usage}`. `--help` and `--version` return `:ok`.
+
+To map that to a process exit code, either branch on the return value:
+
+```elixir
+def main(argv) do
+  case Cheer.run(MyApp.CLI, argv) do
+    {:error, :usage} -> System.halt(2)
+    _ -> :ok
+  end
+end
+```
+
+or let `Cheer.main/3` halt for you with conventional codes (`0` ok, `2` usage):
+
+```elixir
+def main(argv), do: Cheer.main(MyApp.CLI, argv, prog: "myapp")
+```
+
 ## See also
 
 - [Options](options.md) and [Arguments](arguments.md) for the declarations

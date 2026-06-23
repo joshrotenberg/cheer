@@ -42,11 +42,44 @@ defmodule Cheer do
 
   Options:
     * `:prog` - program name for usage lines (default: derived from root command name)
+
+  ## Return value
+
+    * On success, returns whatever the matched command's `run/2` returns.
+    * On a usage failure (unknown option, missing required argument, bad choice,
+      unknown or ambiguous subcommand, missing required subcommand), prints the
+      error and returns `{:error, :usage}`.
+    * For `--help` / `--version` (and a bare command that just prints help),
+      returns `:ok`.
+
+  Use the `{:error, :usage}` result to set a nonzero exit code, or call
+  `main/3` to have Cheer halt with a conventional code for you.
   """
-  @spec run(module(), [String.t()], keyword()) :: term()
+  @spec run(module(), [String.t()], keyword()) :: term() | {:error, :usage}
   def run(root_command, argv, opts \\ []) do
     prog = Keyword.get(opts, :prog)
     Cheer.Router.dispatch(root_command, argv, prog: prog)
+  end
+
+  @doc """
+  Run as an escript entry point, halting the VM with a conventional exit code.
+
+  Dispatches `argv` like `run/3`, then halts the VM: `0` on success (including
+  `--help` and `--version`) and `2` on a usage failure. The command's own
+  `run/2` return value does not affect the exit code; a command that wants
+  custom codes should call `run/3` and halt itself.
+
+      def main(argv), do: Cheer.main(MyApp.CLI, argv, prog: "myapp")
+  """
+  # main/2 and main/3 always System.halt, so they never return locally. That is
+  # the intended behaviour for an escript entry point, not a defect.
+  @dialyzer {:nowarn_function, [main: 2, main: 3]}
+  @spec main(module(), [String.t()], keyword()) :: no_return()
+  def main(root_command, argv, opts \\ []) do
+    case run(root_command, argv, opts) do
+      {:error, :usage} -> System.halt(2)
+      _ -> System.halt(0)
+    end
   end
 
   @doc """
