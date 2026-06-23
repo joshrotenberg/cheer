@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.6](https://github.com/joshrotenberg/cheer/compare/v0.1.5...v0.1.6) (2026-06-23)
+
+
+### Features
+
+* args_conflicts_with_subcommands for optional subcommands ([#54](https://github.com/joshrotenberg/cheer/issues/54)) ([bbbf42c](https://github.com/joshrotenberg/cheer/commit/bbbf42cb4815a3bcfa85dbf5ae8f27eafec30bc7)), closes [#47](https://github.com/joshrotenberg/cheer/issues/47)
+* num_args for multi-value options ([#52](https://github.com/joshrotenberg/cheer/issues/52)) ([b784079](https://github.com/joshrotenberg/cheer/commit/b784079a0e4779807e5f2db308a33cc34f742a65)), closes [#27](https://github.com/joshrotenberg/cheer/issues/27)
+* signal usage failures so callers can set an exit code ([#53](https://github.com/joshrotenberg/cheer/issues/53)) ([c439049](https://github.com/joshrotenberg/cheer/commit/c4390495d5a8baae8269089357aa358993522dcc)), closes [#49](https://github.com/joshrotenberg/cheer/issues/49)
+
+
+### Bug Fixes
+
+* evaluate option/argument opt values instead of storing AST ([#50](https://github.com/joshrotenberg/cheer/issues/50)) ([86722a8](https://github.com/joshrotenberg/cheer/commit/86722a8fa3460fb9d486bf42c60d91fe3ab03081)), closes [#48](https://github.com/joshrotenberg/cheer/issues/48)
+
 ## [0.1.5](https://github.com/joshrotenberg/cheer/compare/v0.1.4...v0.1.5) (2026-04-17)
 
 
