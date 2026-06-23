@@ -525,6 +525,45 @@ defmodule CheerTest do
     end
   end
 
+  # -- Non-literal opt values (issue #48) --------------------------------------
+
+  defmodule TestSigilChoices do
+    use Cheer.Command
+
+    command "effort" do
+      about("Sigil choices")
+
+      option(:effort, type: :string, choices: ~w(low medium high), help: "Effort level")
+      argument(:tag, type: :string, choices: ~w(a b c), required: false, help: "Tag")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "non-literal opt values (issue #48)" do
+    test "~w(...) opt values evaluate instead of being stored as AST" do
+      meta = TestSigilChoices.__cheer_meta__()
+      {:effort, option_opts} = Enum.find(meta.options, fn {n, _} -> n == :effort end)
+      {:tag, arg_opts} = Enum.find(meta.arguments, fn {n, _} -> n == :tag end)
+
+      assert Keyword.get(option_opts, :choices) == ["low", "medium", "high"]
+      assert Keyword.get(arg_opts, :choices) == ["a", "b", "c"]
+    end
+
+    test "~w(...) choices render in help without crashing" do
+      output = capture_io(fn -> Cheer.run(TestSigilChoices, ["--help"]) end)
+      assert output =~ "low"
+      assert output =~ "medium"
+      assert output =~ "high"
+    end
+
+    test "~w(...) choices are enforced at validation time" do
+      output = capture_io(fn -> Cheer.run(TestSigilChoices, ["--effort", "extreme"]) end)
+      assert output =~ "must be one of"
+    end
+  end
+
   # -- Cross-param validation --------------------------------------------------
 
   defmodule TestCrossValidation do

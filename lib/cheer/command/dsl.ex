@@ -107,7 +107,7 @@ defmodule Cheer.Command.DSL do
   """
   defmacro trailing_var_arg(name, opts \\ []) do
     quote do
-      @cheer_trailing_var_arg {unquote(name), unquote(Macro.escape(opts))}
+      @cheer_trailing_var_arg {unquote(name), unquote(opts)}
     end
   end
 
@@ -135,13 +135,13 @@ defmodule Cheer.Command.DSL do
       fname = :"__cheer_validate_#{name}__"
 
       quote do
-        @cheer_arguments {unquote(name), unquote(Macro.escape(clean_opts))}
+        @cheer_arguments {unquote(name), unquote(clean_opts)}
         @cheer_has_validate unquote(name)
         def unquote(fname)(val), do: unquote(validate_ast).(val)
       end
     else
       quote do
-        @cheer_arguments {unquote(name), unquote(Macro.escape(clean_opts))}
+        @cheer_arguments {unquote(name), unquote(clean_opts)}
       end
     end
   end
@@ -186,13 +186,13 @@ defmodule Cheer.Command.DSL do
         fname = :"__cheer_validate_#{name}__"
 
         quote do
-          @cheer_options {unquote(name), unquote(Macro.escape(clean_opts))}
+          @cheer_options {unquote(name), unquote(clean_opts)}
           @cheer_has_validate unquote(name)
           def unquote(fname)(val), do: unquote(validate_ast).(val)
         end
       else
         quote do
-          @cheer_options {unquote(name), unquote(Macro.escape(clean_opts))}
+          @cheer_options {unquote(name), unquote(clean_opts)}
         end
       end
 
