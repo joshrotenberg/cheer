@@ -628,6 +628,53 @@ defmodule CheerTest do
     end
   end
 
+  # -- Usage-failure return value (issue #49) ----------------------------------
+
+  describe "usage-failure return value (issue #49)" do
+    test "unknown option returns {:error, :usage}" do
+      capture_io(fn ->
+        assert {:error, :usage} = Cheer.run(TestGreet, ["world", "--bogus"])
+      end)
+    end
+
+    test "missing required argument returns {:error, :usage}" do
+      capture_io(fn ->
+        assert {:error, :usage} = Cheer.run(TestGreet, [])
+      end)
+    end
+
+    test "bad choice returns {:error, :usage}" do
+      capture_io(fn ->
+        assert {:error, :usage} =
+                 Cheer.run(TestValidation, ["--port", "8080", "--format", "yaml"])
+      end)
+    end
+
+    test "unknown subcommand returns {:error, :usage}" do
+      capture_io(fn ->
+        assert {:error, :usage} = Cheer.run(TestRoot, ["bogus"])
+      end)
+    end
+
+    test "missing required subcommand returns {:error, :usage}" do
+      capture_io(fn ->
+        assert {:error, :usage} = Cheer.run(CheerTest.TestSubRequired, [])
+      end)
+    end
+
+    test "success returns the command's own run/2 value" do
+      assert {:ok, %{name: "world"}} = Cheer.run(TestGreet, ["world"])
+    end
+
+    test "--help returns :ok" do
+      capture_io(fn -> assert :ok = Cheer.run(TestGreet, ["--help"]) end)
+    end
+
+    test "--version returns :ok" do
+      capture_io(fn -> assert :ok = Cheer.run(TestVersioned, ["--version"]) end)
+    end
+  end
+
   # -- Cross-param validation --------------------------------------------------
 
   defmodule TestCrossValidation do

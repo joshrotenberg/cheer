@@ -116,11 +116,11 @@ defmodule Cheer.Router do
 
       {:ambiguous, t, candidates} ->
         print_ambiguous_subcommand(t, candidates)
-        :ok
+        {:error, :usage}
 
       _ ->
         IO.puts("error: unknown command '#{token}'")
-        :ok
+        {:error, :usage}
     end
   end
 
@@ -136,17 +136,20 @@ defmodule Cheer.Router do
 
       {:ambiguous, token, candidates} ->
         print_ambiguous_subcommand(token, candidates)
+        {:error, :usage}
 
       {:error, _unknown_token} when external? ->
         run_leaf(command, meta, argv, opts, hooks)
 
       {:error, unknown_token} ->
         print_unknown_command(meta, unknown_token)
+        {:error, :usage}
 
       :none when meta.subcommands != [] and meta.subcommand_required ->
         IO.puts("error: a subcommand is required")
         IO.puts("")
         Cheer.Help.print(command, opts)
+        {:error, :usage}
 
       :none when meta.subcommands != [] and not external? ->
         Cheer.Help.print(command, opts)
@@ -172,7 +175,7 @@ defmodule Cheer.Router do
         apply_after_hooks(result, Map.get(meta, :after_run, []))
 
       :handled ->
-        :ok
+        {:error, :usage}
     end
   end
 
