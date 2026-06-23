@@ -156,6 +156,11 @@ defmodule Cheer.Command.DSL do
     * `:required` - `true` or `false` (default)
     * `:default` - default value when not provided (`:count` defaults to `0`, `:multi` defaults to `[]`)
     * `:multi` - `true` to allow repeated flags collected into a list (e.g. `--tag a --tag b`)
+    * `:num_args` - collect several values from a single flag invocation into a list:
+      an integer for an exact count (`num_args: 2` accepts `--point 1 2`) or a range
+      for a variable count (`num_args: 1..3`). Collection stops at the next flag or
+      `--`. Distinct from `:multi`, which repeats the flag. An out-of-range count is a
+      usage error.
     * `:env` - environment variable name to read as fallback
     * `:choices` - list of allowed values
     * `:help` - help text shown in `--help`

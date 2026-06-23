@@ -269,6 +269,12 @@ defmodule Cheer.Help do
         do: suffixes ++ ["(global)"],
         else: suffixes
 
+    suffixes =
+      case Keyword.get(opt_opts, :num_args) do
+        nil -> suffixes
+        spec -> suffixes ++ [num_args_label(spec)]
+      end
+
     suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
 
     "  #{short}--#{String.pad_trailing(flag_name <> value_suffix, 16)} #{help}#{suffix}"
@@ -280,6 +286,9 @@ defmodule Cheer.Help do
   # get "unknown option".
   defp flag_from(name) when is_atom(name), do: name |> Atom.to_string() |> flag_from()
   defp flag_from(name) when is_binary(name), do: String.replace(name, "_", "-")
+
+  defp num_args_label(n) when is_integer(n), do: "(#{n} values)"
+  defp num_args_label(%Range{first: first, last: last}), do: "(#{first}..#{last} values)"
 
   defp format_usage(meta, prog) do
     parts = ["Usage: #{prog}"]

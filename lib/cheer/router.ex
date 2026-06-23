@@ -211,7 +211,15 @@ defmodule Cheer.Router do
 
     all_options = meta.options ++ inherited_globals
 
-    {option_parser_opts, option_aliases} = build_option_parser_spec(all_options)
+    # Options declared with `num_args:` accept several values per flag, which
+    # OptionParser cannot express. Pull them (and their value tokens) out of
+    # argv up front, then parse the remainder normally.
+    {num_args_values, argv} = extract_num_args(argv, all_options)
+
+    parser_options =
+      Enum.reject(all_options, fn {_name, o} -> Keyword.has_key?(o, :num_args) end)
+
+    {option_parser_opts, option_aliases} = build_option_parser_spec(parser_options)
 
     {parsed, positional, invalid} =
       OptionParser.parse(argv, strict: option_parser_opts, aliases: option_aliases)
@@ -223,6 +231,7 @@ defmodule Cheer.Router do
       args = apply_defaults(all_options)
       args = apply_env_vars(args, all_options)
       args = Map.merge(args, build_parsed_map(parsed, all_options))
+      args = Map.merge(args, num_args_values)
 
       {declared_positional, rest_args} = Enum.split(positional, length(meta.arguments))
 
@@ -262,7 +271,8 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with :ok <- validate_conditional_required(args, all_options),
+          with :ok <- validate_num_args(num_args_values, all_options),
+               :ok <- validate_conditional_required(args, all_options),
                :ok <- validate_constraints(args, all_options),
                :ok <- validate_groups(args, Map.get(meta, :groups, %{})),
                :ok <- validate_params(args, all_options),
@@ -660,6 +670,137 @@ defmodule Cheer.Router do
     IO.puts("error: '#{token}' is ambiguous")
     IO.puts("candidates: #{Enum.join(candidates, ", ")}")
   end
+
+  # -- num_args (multi-value options) --
+
+  # Collect values for options declared with `num_args:`. OptionParser binds a
+  # single value per flag, so `--point 1 2 3` would otherwise leave "2" and "3"
+  # as positionals. This pulls the matched flag and up to `max` following value
+  # tokens out of argv and returns `{%{point: [1, 2, 3]}, residual_argv}`.
+  # Collection stops at the next flag-looking token (one starting with "-"),
+  # at "--", or once `max` values are taken.
+  defp extract_num_args(argv, options) do
+    num_args_opts = Enum.filter(options, fn {_name, o} -> Keyword.has_key?(o, :num_args) end)
+
+    if num_args_opts == [] do
+      {%{}, argv}
+    else
+      do_extract_num_args(argv, num_args_lookup(num_args_opts), %{}, [])
+    end
+  end
+
+  defp num_args_lookup(num_args_opts) do
+    Enum.flat_map(num_args_opts, fn {name, opts} = entry ->
+      long = [{"--#{flag_string(name)}", entry}]
+
+      short =
+        case Keyword.get(opts, :short) do
+          nil -> []
+          s -> [{"-#{s}", entry}]
+        end
+
+      aliases =
+        Enum.map(Keyword.get(opts, :aliases, []), fn a -> {"--#{flag_string(a)}", entry} end)
+
+      long ++ short ++ aliases
+    end)
+    |> Map.new()
+  end
+
+  defp do_extract_num_args([], _lookup, collected, residual),
+    do: {collected, Enum.reverse(residual)}
+
+  defp do_extract_num_args(["--" | rest], _lookup, collected, residual),
+    do: {collected, Enum.reverse(residual) ++ ["--" | rest]}
+
+  defp do_extract_num_args([token | rest], lookup, collected, residual) do
+    case num_args_flag(token, lookup) do
+      {{name, opts}, inline} ->
+        {_min, max} = num_args_bounds(Keyword.fetch!(opts, :num_args))
+
+        {raw_values, rest2} =
+          case inline do
+            nil -> take_num_args_values(rest, max, [])
+            value -> {[value], rest}
+          end
+
+        values = Enum.map(raw_values, &coerce_arg(&1, opts))
+        do_extract_num_args(rest2, lookup, Map.put(collected, name, values), residual)
+
+      :nomatch ->
+        do_extract_num_args(rest, lookup, collected, [token | residual])
+    end
+  end
+
+  # Resolve a token to a num_args option. Returns `{entry, inline_value}` where
+  # inline_value is the part after `=` for the `--flag=value` form, or nil for
+  # the space-separated form.
+  defp num_args_flag(token, lookup) do
+    cond do
+      Map.has_key?(lookup, token) ->
+        {Map.fetch!(lookup, token), nil}
+
+      String.starts_with?(token, "--") and String.contains?(token, "=") ->
+        [flag, value] = String.split(token, "=", parts: 2)
+
+        case Map.fetch(lookup, flag) do
+          {:ok, entry} -> {entry, value}
+          :error -> :nomatch
+        end
+
+      true ->
+        :nomatch
+    end
+  end
+
+  defp take_num_args_values(tokens, max, acc) when length(acc) >= max,
+    do: {Enum.reverse(acc), tokens}
+
+  defp take_num_args_values([], _max, acc), do: {Enum.reverse(acc), []}
+
+  defp take_num_args_values(["--" | _] = tokens, _max, acc),
+    do: {Enum.reverse(acc), tokens}
+
+  defp take_num_args_values([token | rest], max, acc) do
+    if String.starts_with?(token, "-") and token != "-" do
+      {Enum.reverse(acc), [token | rest]}
+    else
+      take_num_args_values(rest, max, [token | acc])
+    end
+  end
+
+  defp validate_num_args(num_args_values, options) do
+    Enum.reduce_while(num_args_values, :ok, fn {name, values}, _acc ->
+      case Keyword.fetch(Keyword.get(options, name, []), :num_args) do
+        :error ->
+          {:cont, :ok}
+
+        {:ok, spec} ->
+          {min, max} = num_args_bounds(spec)
+          got = length(values)
+
+          if got >= min and got <= max do
+            {:cont, :ok}
+          else
+            {:halt, {:error, num_args_error(name, min, max, got)}}
+          end
+      end
+    end)
+  end
+
+  defp num_args_bounds(n) when is_integer(n), do: {n, n}
+
+  defp num_args_bounds(%Range{first: first, last: last}),
+    do: {min(first, last), max(first, last)}
+
+  defp num_args_error(name, min, max, got) when min == max,
+    do: "--#{flag_string(name)} expects #{min} value(s), got #{got}"
+
+  defp num_args_error(name, min, max, got),
+    do: "--#{flag_string(name)} expects between #{min} and #{max} values, got #{got}"
+
+  defp flag_string(name) when is_atom(name),
+    do: name |> Atom.to_string() |> String.replace("_", "-")
 
   # -- OptionParser spec --
 
