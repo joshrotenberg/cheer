@@ -123,6 +123,34 @@ Behavior:
 - `args[:external_subcommand]` is `nil` when no external sub was invoked,
   `{name, rest}` when one was. Pattern matches are total.
 
+## Optional subcommand (run the parent on an unknown token)
+
+By default a command that declares both `argument`s and `subcommand`s treats an
+unrecognized first token as an unknown command and errors. Set
+`args_conflicts_with_subcommands true` to make the subcommand optional: a token
+that does not match a declared subcommand is parsed as the parent's own
+positional, and option parsing continues across it.
+
+```elixir
+command "roba" do
+  args_conflicts_with_subcommands true
+
+  argument :prompt, type: :string, required: false
+  subcommand Roba.Commands.History
+end
+```
+
+Behavior:
+
+- `roba history` dispatches to the `history` subcommand (declared subs still
+  match first; with `infer_subcommands`, an unambiguous prefix matches too).
+- `roba "summarize this" --model haiku` runs the parent with
+  `prompt: "summarize this"` and `model: "haiku"`.
+- `roba` with no arguments runs the parent with the optional positional absent.
+
+Unlike `external_subcommands`, the parent parses normally, so its own options
+are recognized rather than passed through.
+
 ## Propagating version
 
 By default only the root's `-V` / `--version` prints its version. To share
