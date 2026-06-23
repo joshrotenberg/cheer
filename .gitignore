@@ -28,3 +28,7 @@ CLAUDE.md
 examples/*/_build/
 examples/*/deps/
 examples/*/mix.lock
+
+# Compiled escript binaries (mix escript.build output, named after the app)
+examples/devtool/devtool
+examples/greeter/greeter

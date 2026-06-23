@@ -51,7 +51,11 @@ defmodule Cheer.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url},
+      links: %{
+        "GitHub" => @source_url,
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
+        "Documentation" => "https://hexdocs.pm/cheer"
+      },
       files: ~w(lib docs .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
     ]
   end
