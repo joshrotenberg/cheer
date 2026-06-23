@@ -675,6 +675,65 @@ defmodule CheerTest do
     end
   end
 
+  # -- args_conflicts_with_subcommands (issue #47) -----------------------------
+
+  defmodule TestRobaHistory do
+    use Cheer.Command
+
+    command "history" do
+      about("Show history")
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: :history
+  end
+
+  defmodule TestRoba do
+    use Cheer.Command
+
+    command "roba" do
+      about("Roba root")
+      args_conflicts_with_subcommands(true)
+
+      argument(:prompt, type: :string, required: false, help: "Prompt")
+      option(:model, type: :string, help: "Model")
+
+      subcommand(CheerTest.TestRobaHistory)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "args_conflicts_with_subcommands (issue #47)" do
+    test "declared subcommand still dispatches" do
+      assert :history = Cheer.run(TestRoba, ["history"])
+    end
+
+    test "unknown first token falls through to the parent positional" do
+      assert {:ok, %{prompt: "summarize this"}} = Cheer.run(TestRoba, ["summarize this"])
+    end
+
+    test "options keep parsing across the positional" do
+      assert {:ok, %{prompt: "summarize this", model: "haiku"}} =
+               Cheer.run(TestRoba, ["summarize this", "--model", "haiku"])
+    end
+
+    test "leading options before the positional still run the parent" do
+      assert {:ok, %{prompt: "a prompt", model: "haiku"}} =
+               Cheer.run(TestRoba, ["--model", "haiku", "a prompt"])
+    end
+
+    test "bare command runs the parent with the optional positional absent" do
+      assert {:ok, args} = Cheer.run(TestRoba, [])
+      refute Map.has_key?(args, :prompt)
+    end
+
+    test "the flag is recorded in metadata" do
+      assert TestRoba.__cheer_meta__().args_conflicts_with_subcommands == true
+    end
+  end
+
   # -- Cross-param validation --------------------------------------------------
 
   defmodule TestCrossValidation do

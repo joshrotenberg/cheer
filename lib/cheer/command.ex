@@ -48,6 +48,11 @@ defmodule Cheer.Command do
       Module.register_attribute(__MODULE__, :cheer_propagate_version, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_infer_subcommands, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_external_subcommands, accumulate: false)
+
+      Module.register_attribute(__MODULE__, :cheer_args_conflicts_with_subcommands,
+        accumulate: false
+      )
+
       Module.register_attribute(__MODULE__, :cheer_display_order, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_trailing_var_arg, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_arguments, accumulate: true)

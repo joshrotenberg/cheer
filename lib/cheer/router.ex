@@ -127,6 +127,7 @@ defmodule Cheer.Router do
   defp dispatch_command(command, meta, argv, opts, hooks) do
     infer? = Map.get(meta, :infer_subcommands, false)
     external? = Map.get(meta, :external_subcommands, false)
+    args_conflict? = Map.get(meta, :args_conflicts_with_subcommands, false)
 
     case match_subcommand(meta.subcommands, argv, infer?) do
       {:ok, sub_module, rest} ->
@@ -141,6 +142,12 @@ defmodule Cheer.Router do
       {:error, _unknown_token} when external? ->
         run_leaf(command, meta, argv, opts, hooks)
 
+      # With args_conflicts_with_subcommands, an unknown first token is not an
+      # error: parse it (and the rest of argv) as this command's own arguments
+      # and options, so the parent command runs.
+      {:error, _unknown_token} when args_conflict? ->
+        run_leaf(command, meta, argv, opts, hooks)
+
       {:error, unknown_token} ->
         print_unknown_command(meta, unknown_token)
         {:error, :usage}
@@ -150,6 +157,11 @@ defmodule Cheer.Router do
         IO.puts("")
         Cheer.Help.print(command, opts)
         {:error, :usage}
+
+      # No subcommand matched (argv is empty or starts with an option). When the
+      # parent is runnable, dispatch to it rather than printing help.
+      :none when meta.subcommands != [] and args_conflict? ->
+        run_leaf(command, meta, argv, opts, hooks)
 
       :none when meta.subcommands != [] and not external? ->
         Cheer.Help.print(command, opts)

@@ -87,6 +87,32 @@ defmodule Cheer.Command.DSL do
     do: quote(do: @cheer_external_subcommands(unquote(val)))
 
   @doc """
+  Make subcommands optional so an unknown first token falls through to this
+  command's own positional arguments.
+
+  Without this, a command that declares both `argument`s and `subcommand`s
+  treats an unrecognized first token as an unknown command and errors. With it,
+  a token that does not match a declared subcommand is parsed as a positional
+  argument and option parsing continues across it, so the parent command runs.
+  Declared subcommands still take precedence: an exact (or, with
+  `infer_subcommands`, an unambiguous prefix) match dispatches to the
+  subcommand.
+
+      command "roba" do
+        args_conflicts_with_subcommands(true)
+
+        argument :prompt, type: :string, required: false
+        subcommand Roba.Commands.History
+      end
+
+  `roba history` dispatches to the subcommand, while `roba "summarize this"
+  --model haiku` runs the parent with `prompt: "summarize this"` and
+  `model: "haiku"`.
+  """
+  defmacro args_conflicts_with_subcommands(val),
+    do: quote(do: @cheer_args_conflicts_with_subcommands(unquote(val)))
+
+  @doc """
   Set this command's display order as a subcommand in its parent's help output.
 
   Lower numbers appear first. Commands without an explicit order fall back to
