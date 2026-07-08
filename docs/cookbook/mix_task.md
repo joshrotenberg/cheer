@@ -6,35 +6,14 @@ like a standalone CLI. No framework changes are needed.
 
 Full runnable project: [`examples/mix_task/`](https://github.com/joshrotenberg/cheer/tree/main/examples/mix_task).
 
-## The key idea
-
-A Mix task is a module named `Mix.Tasks.<Name>` that does `use Mix.Task` and
-implements `run/1`, receiving the raw argv list. A Cheer command does
-`use Cheer.Command` and implements `run/2`, receiving parsed args. These do not
-collide: `run/1` and `run/2` have different arities, so one module can be both.
-
-The Mix entry point (`run/1`) delegates to `Cheer.run/3`, which does the
-parsing, validation, and help rendering and then calls your `run/2`.
-
 ## The task
+
+`use Cheer.MixTask` combines `use Mix.Task` and `use Cheer.Command` and generates
+the Mix `run/1` entry point. Declare the command and implement the leaf `run/2`:
 
 ```elixir
 defmodule Mix.Tasks.Greet do
-  @shortdoc "Greet someone with style"
-
-  @moduledoc """
-  #{@shortdoc}
-
-  ## Examples
-
-      mix greet world
-      mix greet world --loud --times 3
-      GREET_GREETING=Hey mix greet Ada
-      mix greet --help
-  """
-
-  use Mix.Task
-  use Cheer.Command
+  use Cheer.MixTask
 
   command "greet" do
     about "Greet someone with style"
@@ -51,27 +30,44 @@ defmodule Mix.Tasks.Greet do
       help: "Repeat the greeting"
   end
 
-  # Mix entry point. Delegate to Cheer, then translate a usage failure into the
-  # Mix exit idiom.
-  @impl Mix.Task
-  def run(argv) do
-    case Cheer.run(__MODULE__, argv, prog: "mix greet") do
-      {:error, :usage} -> exit({:shutdown, 2})
-      other -> other
-    end
-  end
-
-  # Cheer leaf handler. Runs once argv has parsed and validated cleanly.
   @impl Cheer.Command
   def run(%{name: name} = args, _raw) do
     greeting = "#{args[:greeting]}, #{name}!"
     greeting = if args[:loud], do: String.upcase(greeting), else: greeting
 
     for _ <- 1..args[:times] do
-      IO.puts(greeting)
+      Mix.shell().info(greeting)
     end
 
     :ok
+  end
+end
+```
+
+Then `mix greet world --loud` parses, validates, and renders help exactly like a
+standalone CLI.
+
+## What the helper generates
+
+`use Cheer.MixTask` gives you:
+
+- a `run/1` Mix entry point that dispatches argv through the command with
+  `Cheer.run/3`, using `mix greet` as the program name in help and usage output;
+- a `{:error, :usage}` to `exit({:shutdown, 2})` translation, the Mix idiom for a
+  nonzero exit;
+- `@shortdoc` defaulted to the command's `about` text, so `mix help` lists the task.
+
+If you prefer to wire it by hand (or need to override `run/1` for setup), the
+manual equivalent is a plain module that does `use Mix.Task` and `use Cheer.Command`
+(they coexist because `run/1` and `run/2` have different arities) with a `run/1`
+that delegates:
+
+```elixir
+@impl Mix.Task
+def run(argv) do
+  case Cheer.run(__MODULE__, argv, prog: "mix greet") do
+    {:error, :usage} -> exit({:shutdown, 2})
+    other -> other
   end
 end
 ```
@@ -107,15 +103,15 @@ standard Mix mechanism, so the task lists and documents itself like any other.
 
 ## Signaling failure
 
-Return `{:error, :usage}` from a usage failure into a nonzero exit code with
-`exit({:shutdown, 2})`. That is the Mix idiom: Mix catches this exit and halts
-with the given code without a crash report.
+The helper translates a `{:error, :usage}` result into `exit({:shutdown, 2})`,
+the Mix idiom: Mix catches this exit and halts with the given code without a
+crash report.
 
 Do **not** use `Cheer.main/3` inside a Mix task. `main/3` calls `System.halt`,
 which hard-kills the VM immediately: it skips Mix's own cleanup and is wrong
-inside `mix`, CI, and umbrella projects. `Cheer.run/3` exists as the separate
-primitive precisely so callers can decide how to exit. `main/3` is for escript
-entry points, where halting the VM is the whole point.
+inside `mix`, CI, and umbrella projects. The helper uses `Cheer.run/3` for
+exactly this reason. `main/3` is for escript entry points, where halting the VM
+is the whole point.
 
 ## Starting the application
 
@@ -131,17 +127,18 @@ end
 ```
 
 `Application.ensure_all_started/1` works too when you only need a specific
-application.
+application. If you would rather start the app before argv is even parsed,
+override the generated `run/1` and call `Cheer.run/3` yourself.
 
 ## What it shows
 
-- **One module, two behaviours** -- `use Mix.Task` and `use Cheer.Command`
-  coexist because `run/1` and `run/2` do not collide.
-- **`prog: "mix greet"`** -- so the usage line reads as the Mix invocation, not
+- **`use Cheer.MixTask`** -- one line that makes a Cheer command a Mix task,
+  generating the `run/1` entry point.
+- **`mix greet` program name** -- the usage line reads as the Mix invocation, not
   a bare command name.
-- **Exit codes** -- `exit({:shutdown, 2})` translates a Cheer usage failure into
-  a conventional nonzero exit.
-- **Mix help integration** -- `@shortdoc` / `@moduledoc` drive `mix help`.
+- **Exit codes** -- a usage failure becomes `exit({:shutdown, 2})`, a conventional
+  nonzero exit.
+- **Mix help integration** -- `@shortdoc` defaults to the command's `about`.
 - **The `main/3` caveat** -- never `System.halt` from inside a Mix task.
 
 ## See also
