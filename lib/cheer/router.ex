@@ -244,7 +244,7 @@ defmodule Cheer.Router do
       OptionParser.parse(argv, strict: option_parser_opts, aliases: option_aliases)
 
     if invalid != [] do
-      print_invalid_options_error(command, invalid, opts)
+      print_invalid_options_error(command, invalid, opts, all_options)
       :handled
     else
       parsed_map = build_parsed_map(parsed, all_options)
@@ -351,7 +351,7 @@ defmodule Cheer.Router do
       OptionParser.parse_head(argv, strict: option_parser_opts, aliases: option_aliases)
 
     if invalid != [] do
-      print_invalid_options_error(command, invalid, opts)
+      print_invalid_options_error(command, invalid, opts, all_options)
       :handled
     else
       parsed_map = build_parsed_map(parsed, all_options)
@@ -1075,10 +1075,30 @@ defmodule Cheer.Router do
     Cheer.Help.print(command, opts)
   end
 
-  defp print_invalid_options_error(command, invalid, opts) do
+  defp print_invalid_options_error(command, invalid, opts, all_options) do
     flags = Enum.map_join(invalid, ", ", fn {flag, _} -> flag end)
     IO.puts("error: unknown option(s): #{flags}")
+
+    candidates = option_name_candidates(all_options)
+
+    Enum.each(invalid, fn {flag, _value} ->
+      # Exclude an exact match so a known option given a bad value (OptionParser
+      # reports it in `invalid` too) does not suggest the flag the user typed.
+      with "--" <> name <- flag,
+           suggestion when not is_nil(suggestion) <- suggest(name, candidates -- [name]) do
+        IO.puts("\n  Did you mean '--#{suggestion}'?")
+      else
+        _ -> :ok
+      end
+    end)
+
     IO.puts("")
     Cheer.Help.print(command, opts)
+  end
+
+  defp option_name_candidates(all_options) do
+    Enum.flat_map(all_options, fn {name, opts} ->
+      [flag_string(name) | Enum.map(Keyword.get(opts, :aliases, []), &flag_string/1)]
+    end)
   end
 end

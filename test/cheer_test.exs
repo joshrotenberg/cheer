@@ -418,6 +418,43 @@ defmodule CheerTest do
     end
   end
 
+  defmodule TestSuggest do
+    use Cheer.Command
+
+    command "sg" do
+      option(:color, type: :string, aliases: [:colour])
+      option(:port, type: :integer)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "unknown-flag suggestions (#71)" do
+    test "suggests the closest option for a typo'd flag" do
+      out = capture_io(fn -> Cheer.run(TestSuggest, ["--colr", "red"]) end)
+      assert out =~ "unknown option(s): --colr"
+      assert out =~ "Did you mean '--color'?"
+    end
+
+    test "suggests an alias when it is the closest match" do
+      out = capture_io(fn -> Cheer.run(TestSuggest, ["--colour-", "red"]) end)
+      assert out =~ "Did you mean '--colour'?"
+    end
+
+    test "prints no suggestion when nothing is close" do
+      out = capture_io(fn -> Cheer.run(TestSuggest, ["--zzzzzz"]) end)
+      assert out =~ "unknown option(s): --zzzzzz"
+      refute out =~ "Did you mean"
+    end
+
+    test "a known option given a bad value does not suggest itself" do
+      out = capture_io(fn -> Cheer.run(TestSuggest, ["--port", "abc"]) end)
+      assert out =~ "unknown option(s): --port"
+      refute out =~ "Did you mean"
+    end
+  end
+
   # -- Environment variable fallback -------------------------------------------
 
   defmodule TestEnvVar do
