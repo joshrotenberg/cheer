@@ -80,17 +80,24 @@ defmodule Cheer.Router do
           false
       end
 
+    # --help/-h/--version/-V should only be honored in flag position, not when
+    # they're the value supplied to a preceding value-consuming option (e.g. a
+    # string option whose value is literally "--help"). Standard parsers only
+    # intercept these when they'd otherwise be parsed as a flag.
+    value_flags = value_consuming_flag_strings(meta)
+
     cond do
       first_is_subcommand ->
         dispatch_command(command, meta, argv, Keyword.put(opts, :parent_hooks, hooks), hooks)
 
-      "--help" in argv ->
+      flag_present_as_flag?(argv, "--help", value_flags) ->
         Cheer.Help.print(command, Keyword.put(opts, :long, true))
 
-      "-h" in argv ->
+      flag_present_as_flag?(argv, "-h", value_flags) ->
         Cheer.Help.print(command, opts)
 
-      "--version" in argv or "-V" in argv ->
+      flag_present_as_flag?(argv, "--version", value_flags) or
+          flag_present_as_flag?(argv, "-V", value_flags) ->
         print_version(meta)
 
       match?(["help" | _], argv) ->
@@ -99,6 +106,45 @@ defmodule Cheer.Router do
       true ->
         dispatch_command(command, meta, argv, Keyword.put(opts, :parent_hooks, hooks), hooks)
     end
+  end
+
+  # Flag-strings (long, short, aliases) of options that consume a following
+  # value token, i.e. anything except :boolean/:count switches. Used to tell
+  # a genuine "--help" flag apart from one being consumed as another option's
+  # value.
+  defp value_consuming_flag_strings(meta) do
+    meta.options
+    |> Enum.reject(fn {_name, opts} ->
+      Keyword.get(opts, :type, :string) in [:boolean, :count]
+    end)
+    |> Enum.flat_map(fn {name, opts} ->
+      long = ["--#{flag_string(name)}"]
+
+      short =
+        case Keyword.get(opts, :short) do
+          nil -> []
+          s -> ["-#{s}"]
+        end
+
+      aliases = Enum.map(Keyword.get(opts, :aliases, []), fn a -> "--#{flag_string(a)}" end)
+
+      long ++ short ++ aliases
+    end)
+    |> MapSet.new()
+  end
+
+  defp flag_present_as_flag?(argv, flag_name, value_flags) do
+    argv
+    |> Enum.with_index()
+    |> Enum.any?(fn {token, idx} ->
+      token == flag_name and not preceded_by_value_flag?(argv, idx, value_flags)
+    end)
+  end
+
+  defp preceded_by_value_flag?(_argv, 0, _value_flags), do: false
+
+  defp preceded_by_value_flag?(argv, idx, value_flags) do
+    MapSet.member?(value_flags, Enum.at(argv, idx - 1))
   end
 
   defp resolve_help(command, [], opts),
@@ -425,7 +471,8 @@ defmodule Cheer.Router do
         case match_required_if(Keyword.fetch!(opts, :required_if), args, provided) do
           {:match, dep, val} ->
             {:halt,
-             {:error, "--#{name} is required when --#{dep} is #{format_required_value(val)}"}}
+             {:error,
+              "--#{flag_string(name)} is required when --#{flag_string(dep)} is #{format_required_value(val)}"}}
 
           :no_match ->
             {:cont, :ok}
@@ -437,7 +484,9 @@ defmodule Cheer.Router do
         if any_present?(deps, provided) do
           {:cont, :ok}
         else
-          {:halt, {:error, "--#{name} is required unless #{format_dep_list(deps)} is provided"}}
+          {:halt,
+           {:error,
+            "--#{flag_string(name)} is required unless #{format_dep_list(deps)} is provided"}}
         end
 
       true ->
@@ -463,10 +512,10 @@ defmodule Cheer.Router do
   defp any_present?(names, provided) when is_list(names),
     do: Enum.any?(names, &MapSet.member?(provided, &1))
 
-  defp format_dep_list(name) when is_atom(name), do: "--#{name}"
+  defp format_dep_list(name) when is_atom(name), do: "--#{flag_string(name)}"
 
   defp format_dep_list(names) when is_list(names),
-    do: Enum.map_join(names, ", ", &"--#{&1}")
+    do: Enum.map_join(names, ", ", &"--#{flag_string(&1)}")
 
   defp format_required_value(val) when is_binary(val), do: "'#{val}'"
   defp format_required_value(val), do: inspect(val)
@@ -497,7 +546,7 @@ defmodule Cheer.Router do
 
     case Enum.find(conflicts, &MapSet.member?(provided, &1)) do
       nil -> :ok
-      other -> {:error, "--#{name} cannot be used with --#{other}"}
+      other -> {:error, "--#{flag_string(name)} cannot be used with --#{flag_string(other)}"}
     end
   end
 
@@ -506,7 +555,7 @@ defmodule Cheer.Router do
 
     case Enum.find(requires, &(not MapSet.member?(provided, &1))) do
       nil -> :ok
-      other -> {:error, "--#{name} requires --#{other}"}
+      other -> {:error, "--#{flag_string(name)} requires --#{flag_string(other)}"}
     end
   end
 
@@ -524,12 +573,12 @@ defmodule Cheer.Router do
 
       cond do
         Keyword.get(opts, :mutually_exclusive, false) and length(set_members) > 1 ->
-          flags = Enum.map_join(set_members, ", ", &"--#{&1}")
+          flags = Enum.map_join(set_members, ", ", &"--#{flag_string(&1)}")
           {:halt, {:error, "options #{flags} are mutually exclusive (group: #{name})"}}
 
         Keyword.get(opts, :co_occurring, false) and set_members != [] and
             length(set_members) != length(members) ->
-          flags = Enum.map_join(members, ", ", &"--#{&1}")
+          flags = Enum.map_join(members, ", ", &"--#{flag_string(&1)}")
           {:halt, {:error, "options #{flags} must be used together (group: #{name})"}}
 
         true ->
@@ -618,7 +667,7 @@ defmodule Cheer.Router do
         if to_string(value) in Enum.map(choices, &to_string/1) do
           :ok
         else
-          {:error, "--#{name} must be one of: #{Enum.join(choices, ", ")}"}
+          {:error, "--#{flag_string(name)} must be one of: #{Enum.join(choices, ", ")}"}
         end
     end
   end

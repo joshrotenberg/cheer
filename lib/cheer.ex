@@ -94,9 +94,16 @@ defmodule Cheer do
     %{
       name: meta.name,
       about: meta.about,
-      arguments: Enum.map(meta.arguments, fn {name, opts} -> {name, opts} end),
-      options: Enum.map(meta.options, fn {name, opts} -> {name, opts} end),
+      arguments:
+        meta.arguments
+        |> Enum.reject(fn {_name, opts} -> Keyword.get(opts, :hide, false) end)
+        |> Enum.map(fn {name, opts} -> {name, opts} end),
+      options:
+        meta.options
+        |> Enum.reject(fn {_name, opts} -> Keyword.get(opts, :hide, false) end)
+        |> Enum.map(fn {name, opts} -> {name, opts} end),
       groups: Map.get(meta, :groups, %{}),
+      trailing_var_arg: Map.get(meta, :trailing_var_arg),
       subcommands:
         meta.subcommands
         |> Enum.reject(fn sub -> Map.get(sub.__cheer_meta__(), :hide, false) end)

@@ -173,6 +173,15 @@ defmodule Cheer.Help do
   defp maybe_append(list, nil, _fun), do: list
   defp maybe_append(list, value, fun), do: list ++ [fun.(value)]
 
+  # A default value without a String.Chars implementation (e.g. a map or a
+  # struct) would otherwise raise Protocol.UndefinedError when interpolated
+  # directly into the help text; fall back to inspect/1 instead of crashing.
+  defp default_to_string(value) do
+    to_string(value)
+  rescue
+    Protocol.UndefinedError -> inspect(value)
+  end
+
   defp sort_by_display_order(items) do
     items
     |> Enum.with_index()
@@ -251,7 +260,7 @@ defmodule Cheer.Help do
         "[choices: #{Enum.join(choices, ", ")}]"
       end)
       |> maybe_append(Keyword.get(opt_opts, :default), fn default ->
-        "[default: #{default}]"
+        "[default: #{default_to_string(default)}]"
       end)
       |> maybe_append(Keyword.get(opt_opts, :env), fn env ->
         "[env: #{env}]"
