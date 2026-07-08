@@ -574,6 +574,14 @@ defmodule Cheer.Router do
   end
 
   defp coerce_env(value, :boolean), do: value in ["true", "1", "yes"]
+
+  defp coerce_env(value, :count) do
+    case Integer.parse(value) do
+      {n, ""} -> n
+      _ -> value
+    end
+  end
+
   defp coerce_env(value, _), do: value
 
   # -- Per-param validation --

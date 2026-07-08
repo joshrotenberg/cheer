@@ -471,6 +471,43 @@ defmodule CheerTest do
     end
   end
 
+  defmodule TestEnvVarCount do
+    use Cheer.Command
+
+    command "verbose" do
+      about("Verbose level from env")
+
+      option(:verbosity, type: :count, short: :v, default: 0, env: "TEST_CLAP_VERBOSITY")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "environment variable fallback for :count options" do
+    test "coerces a numeric env var to an integer, not a raw string" do
+      System.put_env("TEST_CLAP_VERBOSITY", "3")
+      assert {:ok, args} = Cheer.run(TestEnvVarCount, [])
+      assert args[:verbosity] === 3
+    after
+      System.delete_env("TEST_CLAP_VERBOSITY")
+    end
+
+    test "leaves a non-numeric env var as-is rather than crashing" do
+      System.put_env("TEST_CLAP_VERBOSITY", "loud")
+      assert {:ok, args} = Cheer.run(TestEnvVarCount, [])
+      assert args[:verbosity] == "loud"
+    after
+      System.delete_env("TEST_CLAP_VERBOSITY")
+    end
+
+    test "falls back to the integer default when no env var or flag" do
+      System.delete_env("TEST_CLAP_VERBOSITY")
+      assert {:ok, args} = Cheer.run(TestEnvVarCount, [])
+      assert args[:verbosity] === 0
+    end
+  end
+
   # -- Per-param validation ----------------------------------------------------
 
   defmodule TestValidation do
