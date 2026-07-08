@@ -2864,4 +2864,57 @@ defmodule CheerTest do
       end
     end
   end
+
+  # -- allow_hyphen_values and negative numbers (#73, #64) ---------------------
+
+  defmodule TestHyphen do
+    use Cheer.Command
+
+    command "hy" do
+      option(:range, type: :integer, num_args: 2)
+      option(:coords, type: :string, num_args: 2, allow_hyphen_values: true)
+      option(:pattern, type: :string, allow_hyphen_values: true)
+      option(:plain, type: :string)
+      option(:verbose, type: :boolean)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "negative numbers in num_args (#64)" do
+    test "negative numbers are collected without allow_hyphen_values" do
+      assert {:ok, %{range: [-5, 5]}} = Cheer.run(TestHyphen, ["--range", "-5", "5"])
+    end
+
+    test "a non-numeric flag still stops collection without allow_hyphen_values" do
+      output = capture_io(fn -> Cheer.run(TestHyphen, ["--range", "1", "--verbose"]) end)
+      assert output =~ "--range expects 2 value(s)"
+    end
+  end
+
+  describe "allow_hyphen_values (#73)" do
+    test "num_args option collects hyphen-prefixed values" do
+      assert {:ok, %{coords: ["-a", "-b"]}} = Cheer.run(TestHyphen, ["--coords", "-a", "-b"])
+    end
+
+    test "single-value option accepts a hyphen-prefixed value" do
+      assert {:ok, %{pattern: "-foo"}} = Cheer.run(TestHyphen, ["--pattern", "-foo"])
+      assert {:ok, %{pattern: "--bar"}} = Cheer.run(TestHyphen, ["--pattern", "--bar"])
+    end
+
+    test "single-value option accepts a hyphen-prefixed value in inline form" do
+      assert {:ok, %{pattern: "-x"}} = Cheer.run(TestHyphen, ["--pattern=-x"])
+    end
+
+    test "single-value option takes exactly one value and leaves following flags" do
+      assert {:ok, %{pattern: "x", verbose: true}} =
+               Cheer.run(TestHyphen, ["--pattern", "x", "--verbose"])
+    end
+
+    test "an option without allow_hyphen_values still rejects a hyphen value" do
+      output = capture_io(fn -> Cheer.run(TestHyphen, ["--plain", "-foo"]) end)
+      assert output =~ "unknown option"
+    end
+  end
 end

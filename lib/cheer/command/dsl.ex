@@ -198,7 +198,10 @@ defmodule Cheer.Command.DSL do
       an integer for an exact count (`num_args: 2` accepts `--point 1 2`) or a range
       for a variable count (`num_args: 1..3`). Collection stops at the next flag or
       `--`. Distinct from `:multi`, which repeats the flag. An out-of-range count is a
-      usage error.
+      usage error. Negative numbers are always accepted as values (`--range -5 5`).
+    * `:allow_hyphen_values` - `true` to accept a value that starts with `-`, such
+      as `--pattern -v` or `--range -a -b` (with `num_args`). Without it, only
+      negative numbers are accepted as hyphen-leading values.
     * `:env` - environment variable name to read as fallback
     * `:choices` - list of allowed values
     * `:help` - help text shown in `--help`
