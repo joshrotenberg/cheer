@@ -61,11 +61,11 @@ defmodule Cheer.Command do
       Module.register_attribute(__MODULE__, :cheer_has_validate, accumulate: true)
       Module.register_attribute(__MODULE__, :cheer_groups, accumulate: true)
 
-      # Counters for indexed function generation
-      Module.put_attribute(__MODULE__, :cheer_validator_count, 0)
-      Module.put_attribute(__MODULE__, :cheer_before_run_count, 0)
-      Module.put_attribute(__MODULE__, :cheer_after_run_count, 0)
-      Module.put_attribute(__MODULE__, :cheer_persistent_before_run_count, 0)
+      # Counters for indexed function generation are managed at macro-expansion
+      # time by Cheer.Command.DSL.next_hook_index/2, which lazily starts from 0.
+      # They must not be initialized here: __using__ runs during body execution,
+      # after macros expand, so setting them now would reset the expansion-time
+      # count back to 0 and drop every generated hook clause.
 
       # Current group context (set by `group` macro)
       Module.put_attribute(__MODULE__, :cheer_current_group, nil)

@@ -29,10 +29,16 @@ defmodule Cheer.Command.Compiler do
     options = Module.get_attribute(env.module, :cheer_options) |> Enum.reverse()
     subcommands = Module.get_attribute(env.module, :cheer_subcommands) |> Enum.reverse()
     has_validate = Module.get_attribute(env.module, :cheer_has_validate)
-    validator_count = Module.get_attribute(env.module, :cheer_validator_count)
-    before_run_count = Module.get_attribute(env.module, :cheer_before_run_count)
-    after_run_count = Module.get_attribute(env.module, :cheer_after_run_count)
-    persistent_before_count = Module.get_attribute(env.module, :cheer_persistent_before_run_count)
+    # Hook counters are incremented at macro-expansion time (see
+    # Cheer.Command.DSL.next_hook_index/2). A command that declares no hooks of a
+    # kind never writes the attribute, so default nil to 0.
+    validator_count = Module.get_attribute(env.module, :cheer_validator_count) || 0
+    before_run_count = Module.get_attribute(env.module, :cheer_before_run_count) || 0
+    after_run_count = Module.get_attribute(env.module, :cheer_after_run_count) || 0
+
+    persistent_before_count =
+      Module.get_attribute(env.module, :cheer_persistent_before_run_count) || 0
+
     raw_groups = Module.get_attribute(env.module, :cheer_groups) |> Enum.reverse()
 
     # Validate: leaf commands (no subcommands) must define run/2

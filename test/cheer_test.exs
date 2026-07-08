@@ -865,6 +865,76 @@ defmodule CheerTest do
     end
   end
 
+  # -- Repeated hooks and validators (#58) -------------------------------------
+
+  defmodule TestMultiHooks do
+    use Cheer.Command
+
+    command "multi" do
+      about("multiple hooks of each kind")
+
+      before_run(fn a -> Map.update(a, :trace, ["b0"], &(&1 ++ ["b0"])) end)
+      before_run(fn a -> Map.update(a, :trace, ["b1"], &(&1 ++ ["b1"])) end)
+      before_run(fn a -> Map.update(a, :trace, ["b2"], &(&1 ++ ["b2"])) end)
+
+      after_run(fn r -> r ++ ["a0"] end)
+      after_run(fn r -> r ++ ["a1"] end)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: Map.get(args, :trace, [])
+  end
+
+  defmodule TestMultiValidators do
+    use Cheer.Command
+
+    command "mv" do
+      option(:a, type: :integer)
+      option(:b, type: :integer)
+
+      validate(fn args -> if args[:a], do: :ok, else: {:error, "a required"} end)
+      validate(fn args -> if args[:b], do: :ok, else: {:error, "b required"} end)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestMultiPersistParent do
+    use Cheer.Command
+
+    command "mpp" do
+      persistent_before_run(fn a -> Map.put(a, :p0, true) end)
+      persistent_before_run(fn a -> Map.put(a, :p1, true) end)
+
+      subcommand(CheerTest.TestHooksChild)
+    end
+  end
+
+  describe "repeated lifecycle hooks and validators (#58)" do
+    test "all before_run and after_run hooks run in declaration order" do
+      assert Cheer.run(TestMultiHooks, []) == ["b0", "b1", "b2", "a0", "a1"]
+    end
+
+    test "every cross-param validator is enforced, not just the first" do
+      out =
+        capture_io(fn ->
+          assert Cheer.run(TestMultiValidators, ["--a", "1"]) == {:error, :usage}
+        end)
+
+      assert out =~ "b required"
+
+      out2 = capture_io(fn -> assert Cheer.run(TestMultiValidators, []) == {:error, :usage} end)
+      assert out2 =~ "a required"
+
+      assert {:ok, _} = Cheer.run(TestMultiValidators, ["--a", "1", "--b", "2"])
+    end
+
+    test "all persistent_before_run hooks propagate to children" do
+      assert {:ok, %{p0: true, p1: true}} = Cheer.run(TestMultiPersistParent, ["child"])
+    end
+  end
+
   # -- Mutually exclusive / co-occurring groups --------------------------------
 
   defmodule TestGroups do

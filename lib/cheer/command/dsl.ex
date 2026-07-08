@@ -240,11 +240,10 @@ defmodule Cheer.Command.DSL do
 
   @doc "Cross-parameter validation function. Receives args map, returns `:ok` or `{:error, msg}`."
   defmacro validate(fun) do
-    quote do
-      count = Module.get_attribute(__MODULE__, :cheer_validator_count)
-      Module.put_attribute(__MODULE__, :cheer_validator_count, count + 1)
+    count = next_hook_index(__CALLER__.module, :cheer_validator_count)
 
-      def __cheer_cross_validate__(unquote(Macro.var(:count, __MODULE__)), args) do
+    quote do
+      def __cheer_cross_validate__(unquote(count), args) do
         unquote(fun).(args)
       end
     end
@@ -254,11 +253,10 @@ defmodule Cheer.Command.DSL do
 
   @doc "Run a function on args before `run/2`. Receives and returns args map."
   defmacro before_run(fun) do
-    quote do
-      count = Module.get_attribute(__MODULE__, :cheer_before_run_count)
-      Module.put_attribute(__MODULE__, :cheer_before_run_count, count + 1)
+    count = next_hook_index(__CALLER__.module, :cheer_before_run_count)
 
-      def __cheer_before_run__(unquote(Macro.var(:count, __MODULE__)), args) do
+    quote do
+      def __cheer_before_run__(unquote(count), args) do
         unquote(fun).(args)
       end
     end
@@ -266,11 +264,10 @@ defmodule Cheer.Command.DSL do
 
   @doc "Run a function on the result after `run/2`. Receives and returns result."
   defmacro after_run(fun) do
-    quote do
-      count = Module.get_attribute(__MODULE__, :cheer_after_run_count)
-      Module.put_attribute(__MODULE__, :cheer_after_run_count, count + 1)
+    count = next_hook_index(__CALLER__.module, :cheer_after_run_count)
 
-      def __cheer_after_run__(unquote(Macro.var(:count, __MODULE__)), result) do
+    quote do
+      def __cheer_after_run__(unquote(count), result) do
         unquote(fun).(result)
       end
     end
@@ -278,14 +275,24 @@ defmodule Cheer.Command.DSL do
 
   @doc "Like `before_run`, but inherited by all child subcommands."
   defmacro persistent_before_run(fun) do
-    quote do
-      count = Module.get_attribute(__MODULE__, :cheer_persistent_before_run_count)
-      Module.put_attribute(__MODULE__, :cheer_persistent_before_run_count, count + 1)
+    count = next_hook_index(__CALLER__.module, :cheer_persistent_before_run_count)
 
-      def __cheer_persistent_before_run__(unquote(Macro.var(:count, __MODULE__)), args) do
+    quote do
+      def __cheer_persistent_before_run__(unquote(count), args) do
         unquote(fun).(args)
       end
     end
+  end
+
+  # Read and increment a per-kind hook counter at macro-expansion time so each
+  # generated clause head carries a distinct integer literal (e.g. `(0, args)`,
+  # `(1, args)`). Using the counter's value here rather than `Macro.var(:count)`
+  # is what keeps later clauses from being shadowed by clause 0. Because macros
+  # expand in source order, the returned index matches declaration order.
+  defp next_hook_index(module, attr) do
+    count = Module.get_attribute(module, attr) || 0
+    Module.put_attribute(module, attr, count + 1)
+    count
   end
 
   # -- Param groups --
