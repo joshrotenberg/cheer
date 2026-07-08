@@ -209,3 +209,5 @@ mix run -e 'Devtool.CLI.main(["server", "--help"])'
 - Guides: [Subcommands](../guides/subcommands.md),
   [Lifecycle hooks](../guides/lifecycle_hooks.md),
   [Constraints](../guides/constraints.md).
+- Next cookbook: [Mix task](mix_task.md) -- drive a `mix` command with the same
+  command definition.
