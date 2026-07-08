@@ -303,7 +303,8 @@ defmodule Cheer.Router do
                :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
-               :ok <- validate_params(args, all_options),
+               # Include arguments so argument-level :validate and :choices run.
+               :ok <- validate_params(args, all_options ++ meta.arguments),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
           else
@@ -361,7 +362,8 @@ defmodule Cheer.Router do
           with :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
-               :ok <- validate_params(args, all_options),
+               # Include arguments so argument-level :validate and :choices run.
+               :ok <- validate_params(args, all_options ++ meta.arguments),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
           else
