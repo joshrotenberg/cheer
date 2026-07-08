@@ -200,6 +200,10 @@ defmodule Cheer.Command.DSL do
       `--`. Distinct from `:multi`, which repeats the flag. An out-of-range count is a
       usage error.
     * `:env` - environment variable name to read as fallback
+    * `:value_delimiter` - split a single value on this delimiter into a list
+      (e.g. `value_delimiter: ","` turns `--tags a,b,c` into `["a", "b", "c"]`),
+      applying the option's `:type` coercion to each element. Combines with
+      `:multi` to flatten each occurrence's split values into one list.
     * `:choices` - list of allowed values
     * `:help` - help text shown in `--help`
     * `:long_help` - extended help text shown by `--help` (long form)

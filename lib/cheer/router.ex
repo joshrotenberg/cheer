@@ -842,7 +842,7 @@ defmodule Cheer.Router do
   defp build_option_parser_spec(options) do
     spec =
       Enum.map(options, fn {name, opts} ->
-        type = Keyword.get(opts, :type, :string)
+        type = parser_spec_type(opts)
 
         if Keyword.get(opts, :multi, false) do
           {name, [type, :keep]}
@@ -857,7 +857,7 @@ defmodule Cheer.Router do
       options
       |> Enum.filter(fn {_name, opts} -> Keyword.has_key?(opts, :aliases) end)
       |> Enum.flat_map(fn {_name, opts} ->
-        type = Keyword.get(opts, :type, :string)
+        type = parser_spec_type(opts)
 
         type_spec =
           if Keyword.get(opts, :multi, false), do: [type, :keep], else: type
@@ -873,9 +873,24 @@ defmodule Cheer.Router do
     {spec ++ alias_specs, aliases}
   end
 
+  # An option with :value_delimiter is split into elements *after* OptionParser
+  # hands back the raw flag value (build_parsed_map), so OptionParser itself
+  # must be told to treat it as a plain string — otherwise it would try (and
+  # fail) to coerce the whole "a,b,c" token to the option's real type before
+  # splitting ever happens.
+  defp parser_spec_type(opts) do
+    if Keyword.has_key?(opts, :value_delimiter) do
+      :string
+    else
+      Keyword.get(opts, :type, :string)
+    end
+  end
+
   defp build_parsed_map(parsed, options) do
     multi_names =
       for {name, opts} <- options, Keyword.get(opts, :multi, false), into: MapSet.new(), do: name
+
+    options_by_name = Map.new(options)
 
     # Build alias -> primary name mapping
     alias_map =
@@ -886,16 +901,37 @@ defmodule Cheer.Router do
       end)
       |> Map.new()
 
-    Enum.reduce(parsed, %{}, fn {key, value}, acc ->
+    Enum.reduce(parsed, %{}, fn {key, raw_value}, acc ->
       # Remap alias to primary name
       primary = Map.get(alias_map, key, key)
+      opts = Map.get(options_by_name, primary, [])
+      value = split_value_delimiter(raw_value, opts)
 
       if MapSet.member?(multi_names, primary) do
-        Map.update(acc, primary, [value], &(&1 ++ [value]))
+        Map.update(acc, primary, List.wrap(value), &(&1 ++ List.wrap(value)))
       else
         Map.put(acc, primary, value)
       end
     end)
+  end
+
+  # Splits a single "a,b,c"-shaped flag value into a coerced list, like clap's
+  # value_delimiter. Only applies when :value_delimiter is declared; other
+  # values pass through untouched (raw_value may not even be a string, e.g.
+  # a :boolean/:count value from OptionParser).
+  defp split_value_delimiter(raw_value, opts) do
+    case Keyword.get(opts, :value_delimiter) do
+      nil ->
+        raw_value
+
+      delimiter when is_binary(raw_value) ->
+        raw_value
+        |> String.split(delimiter)
+        |> Enum.map(&coerce_arg(&1, opts))
+
+      _delimiter ->
+        raw_value
+    end
   end
 
   # -- Output helpers --

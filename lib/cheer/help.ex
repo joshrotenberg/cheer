@@ -275,6 +275,12 @@ defmodule Cheer.Help do
         spec -> suffixes ++ [num_args_label(spec)]
       end
 
+    suffixes =
+      case Keyword.get(opt_opts, :value_delimiter) do
+        nil -> suffixes
+        delimiter -> suffixes ++ ["(delimiter: '#{delimiter}')"]
+      end
+
     suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
 
     "  #{short}--#{String.pad_trailing(flag_name <> value_suffix, 16)} #{help}#{suffix}"

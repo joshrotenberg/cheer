@@ -564,6 +564,56 @@ defmodule CheerTest do
     end
   end
 
+  # -- value_delimiter (issue #70) ---------------------------------------------
+
+  defmodule TestValueDelimiter do
+    use Cheer.Command
+
+    command "tagcmd" do
+      about("value_delimiter")
+
+      option(:tags, type: :string, value_delimiter: ",", help: "Tags")
+      option(:ids, type: :integer, value_delimiter: ",", help: "IDs")
+      option(:groups, type: :string, value_delimiter: ",", multi: true, help: "Groups")
+      option(:verbose, type: :boolean, help: "Verbose")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "value_delimiter (issue #70)" do
+    test "splits a single value into a list" do
+      assert {:ok, %{tags: ["a", "b", "c"]}} = Cheer.run(TestValueDelimiter, ["--tags", "a,b,c"])
+    end
+
+    test "a single value with no delimiter present still becomes a one-element list" do
+      assert {:ok, %{tags: ["solo"]}} = Cheer.run(TestValueDelimiter, ["--tags", "solo"])
+    end
+
+    test "applies the option's type coercion to each split element" do
+      assert {:ok, %{ids: [1, 2, 3]}} = Cheer.run(TestValueDelimiter, ["--ids", "1,2,3"])
+    end
+
+    test "works with --flag=value inline form" do
+      assert {:ok, %{tags: ["x", "y"]}} = Cheer.run(TestValueDelimiter, ["--tags=x,y"])
+    end
+
+    test "combines with :multi: each occurrence's split values are flattened together" do
+      assert {:ok, %{groups: ["a", "b", "c", "d"]}} =
+               Cheer.run(TestValueDelimiter, ["--groups", "a,b", "--groups", "c,d"])
+    end
+
+    test "an option without value_delimiter is unaffected" do
+      assert {:ok, %{verbose: true}} = Cheer.run(TestValueDelimiter, ["--verbose"])
+    end
+
+    test "shown in help text" do
+      output = capture_io(fn -> Cheer.run(TestValueDelimiter, ["--help"]) end)
+      assert output =~ "(delimiter: ',')"
+    end
+  end
+
   # -- num_args / multi-value options (issue #27) ------------------------------
 
   defmodule TestNumArgs do
