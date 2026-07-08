@@ -118,7 +118,7 @@ defmodule Cheer.Completion do
 
   defp zsh_option_spec({name, opts}) do
     help = Keyword.get(opts, :help, "") |> escape_zsh()
-    "'--#{name}[#{help}]'"
+    "'--#{flag_name(name)}[#{help}]'"
   end
 
   defp escape_zsh(str), do: String.replace(str, "'", "'\\''")
@@ -148,7 +148,7 @@ defmodule Cheer.Completion do
         help = Keyword.get(opts, :help, "") |> escape_fish()
         short = Keyword.get(opts, :short)
         short_flag = if short, do: " -s #{short}", else: ""
-        "complete -c #{prog} -n '#{condition}' -l #{name}#{short_flag} -d '#{help}'"
+        "complete -c #{prog} -n '#{condition}' -l #{flag_name(name)}#{short_flag} -d '#{help}'"
       end)
 
     child_lines =
@@ -249,8 +249,9 @@ defmodule Cheer.Completion do
   # -- Helpers --
 
   defp option_completions({name, opts}) do
-    flags = ["--#{name}"]
-    flags = if Keyword.get(opts, :type) == :boolean, do: flags ++ ["--no-#{name}"], else: flags
+    flag = flag_name(name)
+    flags = ["--#{flag}"]
+    flags = if Keyword.get(opts, :type) == :boolean, do: flags ++ ["--no-#{flag}"], else: flags
     short = Keyword.get(opts, :short)
     if short, do: flags ++ ["-#{short}"], else: flags
   end
@@ -271,8 +272,8 @@ defmodule Cheer.Completion do
   end
 
   # Atom option names become kebab-case flags to match what the parser accepts
-  # (see `Cheer.Help.flag_from/1`). Used by the PowerShell generator; the other
-  # generators have a pre-existing underscore/hyphen inconsistency tracked separately.
+  # (see `Cheer.Help.flag_from/1`). Used by every generator so completions never
+  # suggest a flag the parser would reject.
   defp flag_name(name) when is_atom(name), do: name |> Atom.to_string() |> flag_name()
   defp flag_name(name) when is_binary(name), do: String.replace(name, "_", "-")
 end

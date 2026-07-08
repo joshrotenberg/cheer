@@ -1145,6 +1145,28 @@ defmodule CheerTest do
       refute script =~ "'--base_port'"
     end
 
+    test "bash/zsh/fish flag names are kebab-cased to match the parser (#65)" do
+      defmodule TestShellUnderscores do
+        use Cheer.Command
+
+        command "app" do
+          about("App")
+          option(:base_port, type: :integer, help: "Base port")
+          option(:dry_run, type: :boolean, help: "Dry run")
+        end
+
+        @impl Cheer.Command
+        def run(_args, _raw), do: :ok
+      end
+
+      for shell <- [:bash, :zsh, :fish] do
+        script = Cheer.Completion.generate(TestShellUnderscores, shell, prog: "app")
+        assert script =~ "base-port", "#{shell} should emit kebab-case flag"
+        refute script =~ "base_port", "#{shell} should not leak the underscore flag"
+        assert script =~ "dry-run", "#{shell} should emit kebab-case boolean flag"
+      end
+    end
+
     test "powershell completion escapes single quotes in help text (#23)" do
       defmodule TestPwshQuotes do
         use Cheer.Command
