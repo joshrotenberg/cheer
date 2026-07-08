@@ -9,6 +9,12 @@ same handlers.
 Cheer.Repl.start(MyApp.CLI.Root, prog: "my-app")
 ```
 
+Pass `:banner` to override the auto-generated greeting printed on start:
+
+```elixir
+Cheer.Repl.start(MyApp.CLI.Root, prog: "my-app", banner: "Welcome. Type 'help'.")
+```
+
 ```
 my-app> greet world --loud
 HELLO, WORLD!
@@ -24,6 +30,7 @@ my-app> exit
 
 - `help` / `?` -- print help for the root command (or a sub, with
   `help <sub>`).
+- `commands` -- print the full command tree (every subcommand, indented).
 - `exit` / `quit` / `Ctrl+D` -- leave the REPL.
 
 ## Tokenization

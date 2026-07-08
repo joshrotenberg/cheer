@@ -48,8 +48,30 @@ option :tag, type: :string, multi: true
 # --tag a --tag b  ->  args[:tag] == ["a", "b"]
 ```
 
-Distinct from multi-value (consuming multiple tokens after one flag), which
-is tracked as a future feature.
+## Multi-value flags (`:num_args`)
+
+`:num_args` collects several values from a single flag invocation into a list.
+Pass an integer for an exact count or a range for a variable count:
+
+```elixir
+option :point, type: :integer, num_args: 2
+# --point 1 2   ->  args[:point] == [1, 2]
+
+option :tags, type: :string, num_args: 1..3
+# --tags a b c  ->  args[:tags] == ["a", "b", "c"]
+```
+
+Both the space-separated form (`--point 1 2`) and the `--flag=value` form work.
+Collection stops at the next flag (a token starting with `-`) or at `--`, and
+each value is coerced to the option's `:type`. A count outside the declared
+range is a usage error:
+
+```
+--point 1   ->   error: --point expects 2 value(s), got 1
+```
+
+This is distinct from `:multi`, which repeats the whole flag (`--tag a --tag b`)
+rather than consuming multiple tokens after one flag.
 
 ## Aliases (long-form)
 
