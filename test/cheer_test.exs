@@ -525,6 +525,115 @@ defmodule CheerTest do
     end
   end
 
+  defmodule TestArgumentValidate do
+    use Cheer.Command
+
+    command "argvalidate" do
+      about("Argument-level :validate")
+
+      argument(:name,
+        type: :string,
+        required: true,
+        validate: fn v ->
+          if String.length(v) > 2, do: :ok, else: {:error, "name too short"}
+        end
+      )
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "argument-level :validate (issue #69)" do
+    test "passes when validation succeeds" do
+      assert {:ok, %{name: "alice"}} = Cheer.run(TestArgumentValidate, ["alice"])
+    end
+
+    test "fails when validation rejects the value" do
+      output = capture_io(fn -> Cheer.run(TestArgumentValidate, ["a"]) end)
+      assert output =~ "name too short"
+    end
+  end
+
+  defmodule TestArgumentCoercion do
+    use Cheer.Command
+
+    command "argcoerce" do
+      about("Argument coercion for :float and :boolean")
+
+      argument(:ratio, type: :float, required: false)
+      argument(:enabled, type: :boolean, required: false)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "argument coercion for :float and :boolean (issue #69)" do
+    test "coerces a float argument" do
+      assert {:ok, %{ratio: 1.5}} = Cheer.run(TestArgumentCoercion, ["1.5"])
+    end
+
+    test "leaves an unparseable float argument as the raw string" do
+      assert {:ok, %{ratio: "nope"}} = Cheer.run(TestArgumentCoercion, ["nope"])
+    end
+
+    test "coerces a boolean argument" do
+      assert {:ok, %{ratio: 1.0, enabled: true}} =
+               Cheer.run(TestArgumentCoercion, ["1.0", "true"])
+
+      assert {:ok, %{enabled: false}} = Cheer.run(TestArgumentCoercion, ["1.0", "nope"])
+    end
+  end
+
+  defmodule TestEnvVarFloatBoolean do
+    use Cheer.Command
+
+    command "envcoerce" do
+      about("Env var coercion for :float and :boolean")
+
+      option(:ratio, type: :float, default: 0.0, env: "TEST_CLAP_RATIO")
+      option(:enabled, type: :boolean, default: false, env: "TEST_CLAP_ENABLED")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "env var coercion for :float and :boolean (issue #69)" do
+    test "coerces a float env var" do
+      System.put_env("TEST_CLAP_RATIO", "2.5")
+      assert {:ok, args} = Cheer.run(TestEnvVarFloatBoolean, [])
+      assert args[:ratio] === 2.5
+    after
+      System.delete_env("TEST_CLAP_RATIO")
+    end
+
+    test "leaves an unparseable float env var as the raw string" do
+      System.put_env("TEST_CLAP_RATIO", "nope")
+      assert {:ok, args} = Cheer.run(TestEnvVarFloatBoolean, [])
+      assert args[:ratio] == "nope"
+    after
+      System.delete_env("TEST_CLAP_RATIO")
+    end
+
+    test "coerces a boolean env var" do
+      System.put_env("TEST_CLAP_ENABLED", "true")
+      assert {:ok, args} = Cheer.run(TestEnvVarFloatBoolean, [])
+      assert args[:enabled] === true
+    after
+      System.delete_env("TEST_CLAP_ENABLED")
+    end
+
+    test "a non-truthy boolean env var coerces to false" do
+      System.put_env("TEST_CLAP_ENABLED", "nope")
+      assert {:ok, args} = Cheer.run(TestEnvVarFloatBoolean, [])
+      assert args[:enabled] === false
+    after
+      System.delete_env("TEST_CLAP_ENABLED")
+    end
+  end
+
   # -- Non-literal opt values (issue #48) --------------------------------------
 
   defmodule TestSigilChoices do
@@ -1134,6 +1243,61 @@ defmodule CheerTest do
         end)
 
       assert output =~ "test interactive shell"
+    end
+
+    test "the 'commands' built-in prints the tree" do
+      output =
+        capture_io("commands\nexit\n", fn ->
+          Cheer.Repl.start(TestRoot, prog: "test")
+        end)
+
+      assert output =~ "greet"
+    end
+
+    test "'?' is an alias for 'help'" do
+      output =
+        capture_io("?\nexit\n", fn ->
+          Cheer.Repl.start(TestRoot, prog: "test")
+        end)
+
+      assert output =~ "COMMANDS:"
+    end
+
+    test "'quit' exits the same as 'exit'" do
+      output =
+        capture_io("quit\n", fn ->
+          Cheer.Repl.start(TestRoot, prog: "test")
+        end)
+
+      assert output =~ "Bye!"
+    end
+
+    test "an empty line is skipped and re-prompts rather than erroring" do
+      output =
+        capture_io("\ngreet world\nexit\n", fn ->
+          Cheer.Repl.start(TestRoot, prog: "test")
+        end)
+
+      assert output =~ "Bye!"
+    end
+
+    test "EOF on stdin exits gracefully" do
+      output =
+        capture_io("", fn ->
+          Cheer.Repl.start(TestRoot, prog: "test")
+        end)
+
+      assert output =~ "Bye!"
+    end
+
+    test "accepts a custom :banner option" do
+      output =
+        capture_io("exit\n", fn ->
+          Cheer.Repl.start(TestRoot, prog: "test", banner: "Welcome to my custom shell!")
+        end)
+
+      assert output =~ "Welcome to my custom shell!"
+      refute output =~ "interactive shell"
     end
   end
 
@@ -2646,6 +2810,110 @@ defmodule CheerTest do
     test "commands with subcommands and no external_subcommands still error on unknown tokens (regression)" do
       output = capture_io(fn -> Cheer.run(TestNoExternalSub, ["surprise"]) end)
       assert output =~ "error: unknown command 'surprise'"
+    end
+  end
+
+  # -- Cheer.main/2,3 exit codes (issue #69) -----------------------------------
+  #
+  # main/2 always System.halt()s, so it cannot be exercised in-process; run it
+  # in a subprocess against the ebin the test suite already compiled.
+
+  describe "Cheer.main/2 exit codes" do
+    setup do
+      ebin = Path.join([Mix.Project.build_path(), "lib", "cheer", "ebin"])
+      {:ok, ebin: ebin}
+    end
+
+    defp run_main_subprocess(ebin, script) do
+      path =
+        Path.join(System.tmp_dir!(), "cheer_main_#{System.unique_integer([:positive])}.exs")
+
+      File.write!(path, script)
+
+      result =
+        System.cmd(System.find_executable("elixir"), ["-pa", ebin, path], stderr_to_stdout: true)
+
+      File.rm(path)
+      result
+    end
+
+    test "exits 0 when the command succeeds", %{ebin: ebin} do
+      script = """
+      defmodule CheerTest.MainExitOk do
+        use Cheer.Command
+
+        command "ok" do
+          about("ok")
+        end
+
+        @impl Cheer.Command
+        def run(_args, _raw), do: {:ok, :done}
+      end
+
+      Cheer.main(CheerTest.MainExitOk, [])
+      """
+
+      {_output, exit_code} = run_main_subprocess(ebin, script)
+      assert exit_code == 0
+    end
+
+    test "exits 2 when the command returns a usage error", %{ebin: ebin} do
+      script = """
+      defmodule CheerTest.MainExitUsageError do
+        use Cheer.Command
+
+        command "fail" do
+          about("fail")
+          option(:x, type: :string, required: true)
+        end
+
+        @impl Cheer.Command
+        def run(_args, _raw), do: {:ok, :done}
+      end
+
+      Cheer.main(CheerTest.MainExitUsageError, [])
+      """
+
+      {_output, exit_code} = run_main_subprocess(ebin, script)
+      assert exit_code == 2
+    end
+  end
+
+  # -- Compiler warning paths (issue #69) --------------------------------------
+
+  describe "compile-time warnings" do
+    test "warns when a leaf command does not implement run/2" do
+      code = """
+      defmodule CheerTest.CompilerWarningNoRunLeaf do
+        use Cheer.Command
+
+        command "norun" do
+          about("Leaf without run/2")
+        end
+      end
+      """
+
+      warnings = capture_io(:stderr, fn -> Code.compile_string(code) end)
+      assert warnings =~ "is a leaf command (no subcommands) but does not implement run/2"
+    end
+
+    test "warns when version(\"\") is called with an empty string" do
+      code = """
+      defmodule CheerTest.CompilerWarningEmptyVersion do
+        use Cheer.Command
+
+        command "emptyversion" do
+          about("Empty version")
+          version("")
+        end
+
+        @impl Cheer.Command
+        def run(args, _raw), do: {:ok, args}
+      end
+      """
+
+      warnings = capture_io(:stderr, fn -> Code.compile_string(code) end)
+      assert warnings =~ "called `version(\"\")`"
     end
   end
 end
