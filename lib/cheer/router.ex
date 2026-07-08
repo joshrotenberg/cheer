@@ -303,7 +303,7 @@ defmodule Cheer.Router do
                :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
-               :ok <- validate_params(args, all_options),
+               {:ok, args} <- validate_params(args, all_options ++ meta.arguments),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
           else
@@ -361,7 +361,7 @@ defmodule Cheer.Router do
           with :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
-               :ok <- validate_params(args, all_options),
+               {:ok, args} <- validate_params(args, all_options ++ meta.arguments),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
           else
@@ -579,20 +579,32 @@ defmodule Cheer.Router do
   # -- Per-param validation --
 
   defp validate_params(args, options) do
-    Enum.reduce_while(options, :ok, fn {name, opts}, _acc ->
-      case Map.fetch(args, name) do
+    Enum.reduce_while(options, {:ok, args}, fn {name, opts}, {:ok, acc_args} ->
+      case Map.fetch(acc_args, name) do
         {:ok, value} ->
           with :ok <- validate_choices(name, value, opts),
-               :ok <- validate_custom(name, value, opts) do
-            {:cont, :ok}
+               {:ok, parsed} <- apply_custom_parser(value, opts),
+               :ok <- validate_custom(name, parsed, opts) do
+            {:cont, {:ok, Map.put(acc_args, name, parsed)}}
           else
             {:error, msg} -> {:halt, {:error, msg}}
           end
 
         :error ->
-          {:cont, :ok}
+          {:cont, {:ok, acc_args}}
       end
     end)
+  end
+
+  # A :parse fun transforms the built-in-coerced value into a domain value
+  # (atom, Date, URI, enum...) after :choices has checked the raw value but
+  # before :validate runs, so custom validators see the final, parsed value
+  # rather than a string/number they'd have to re-parse themselves.
+  defp apply_custom_parser(value, opts) do
+    case Keyword.get(opts, :parse) do
+      nil -> {:ok, value}
+      fun when is_function(fun, 1) -> fun.(value)
+    end
   end
 
   defp validate_choices(name, value, opts) do

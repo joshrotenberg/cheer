@@ -60,6 +60,7 @@ defmodule Cheer.Command do
       Module.register_attribute(__MODULE__, :cheer_options, accumulate: true)
       Module.register_attribute(__MODULE__, :cheer_subcommands, accumulate: true)
       Module.register_attribute(__MODULE__, :cheer_has_validate, accumulate: true)
+      Module.register_attribute(__MODULE__, :cheer_has_parse, accumulate: true)
       Module.register_attribute(__MODULE__, :cheer_groups, accumulate: true)
 
       # Counters for indexed function generation are managed at macro-expansion

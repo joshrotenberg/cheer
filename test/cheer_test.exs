@@ -525,6 +525,77 @@ defmodule CheerTest do
     end
   end
 
+  defmodule TestCustomParser do
+    use Cheer.Command
+
+    command "parsecmd" do
+      about("Custom :parse")
+
+      option(:level,
+        type: :string,
+        parse: fn
+          "low" -> {:ok, :low}
+          "high" -> {:ok, :high}
+          other -> {:error, "invalid level: #{other}"}
+        end,
+        validate: fn
+          :low -> :ok
+          :high -> {:error, "high is temporarily disabled"}
+        end,
+        help: "Level"
+      )
+
+      option(:count, type: :integer, parse: fn v -> {:ok, v * 2} end, help: "Doubled count")
+
+      argument(:mode,
+        type: :string,
+        required: false,
+        parse: fn v -> {:ok, String.upcase(v)} end
+      )
+
+      option(:env_level,
+        type: :string,
+        env: "TEST_CLAP_PARSE_LEVEL",
+        parse: fn v -> {:ok, String.to_atom(v)} end
+      )
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "custom :parse (issue #72)" do
+    test "transforms the coerced value into a domain value" do
+      assert {:ok, %{level: :low}} = Cheer.run(TestCustomParser, ["--level", "low"])
+    end
+
+    test "a parse error is reported and short-circuits the pipeline" do
+      output = capture_io(fn -> Cheer.run(TestCustomParser, ["--level", "medium"]) end)
+      assert output =~ "invalid level: medium"
+    end
+
+    test "parse runs before validate, so validate sees the parsed value" do
+      output = capture_io(fn -> Cheer.run(TestCustomParser, ["--level", "high"]) end)
+      assert output =~ "high is temporarily disabled"
+    end
+
+    test "parse applies to a plain integer-typed option too" do
+      assert {:ok, %{count: 6}} = Cheer.run(TestCustomParser, ["--level", "low", "--count", "3"])
+    end
+
+    test "parse applies to a positional argument" do
+      assert {:ok, %{mode: "CLI"}} = Cheer.run(TestCustomParser, ["--level", "low", "cli"])
+    end
+
+    test "parse applies to a value supplied via :env fallback" do
+      System.put_env("TEST_CLAP_PARSE_LEVEL", "prod")
+      assert {:ok, args} = Cheer.run(TestCustomParser, ["--level", "low"])
+      assert args[:env_level] == :prod
+    after
+      System.delete_env("TEST_CLAP_PARSE_LEVEL")
+    end
+  end
+
   # -- Non-literal opt values (issue #48) --------------------------------------
 
   defmodule TestSigilChoices do

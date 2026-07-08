@@ -164,23 +164,39 @@ defmodule Cheer.Command.DSL do
     * `:value_name` - placeholder name in help (e.g. `"FILE"`)
     * `:hide` - `true` to hide from help output
     * `:display_order` - integer controlling position in help (lower first)
+    * `:parse` - `fn raw -> {:ok, value} | {:error, msg} end`; transforms the
+      built-in-coerced value into a domain value (atom, Date, URI, an enum...)
+      before `:validate` runs, so validators see the final parsed value
     * `:validate` - `fn value -> :ok | {:error, msg} end`
   """
   defmacro argument(name, opts \\ []) do
-    {validate_ast, clean_opts} = Keyword.pop(opts, :validate)
+    {validate_ast, opts} = Keyword.pop(opts, :validate)
+    {parse_ast, clean_opts} = Keyword.pop(opts, :parse)
 
-    if validate_ast do
-      fname = :"__cheer_validate_#{name}__"
+    validate_def =
+      if validate_ast do
+        fname = :"__cheer_validate_#{name}__"
 
-      quote do
-        @cheer_arguments {unquote(name), unquote(clean_opts)}
-        @cheer_has_validate unquote(name)
-        def unquote(fname)(val), do: unquote(validate_ast).(val)
+        quote do
+          @cheer_has_validate unquote(name)
+          def unquote(fname)(val), do: unquote(validate_ast).(val)
+        end
       end
-    else
-      quote do
-        @cheer_arguments {unquote(name), unquote(clean_opts)}
+
+    parse_def =
+      if parse_ast do
+        fname = :"__cheer_parse_#{name}__"
+
+        quote do
+          @cheer_has_parse unquote(name)
+          def unquote(fname)(val), do: unquote(parse_ast).(val)
+        end
       end
+
+    quote do
+      @cheer_arguments {unquote(name), unquote(clean_opts)}
+      unquote(validate_def)
+      unquote(parse_def)
     end
   end
 
@@ -215,6 +231,9 @@ defmodule Cheer.Command.DSL do
       any pair matches (i.e. `args[other_opt] == value`)
     * `:required_unless` - atom or list of atoms; this option is required unless any
       of the named options are present
+    * `:parse` - `fn raw -> {:ok, value} | {:error, msg} end`; transforms the
+      built-in-coerced value into a domain value (atom, Date, URI, an enum...)
+      before `:validate` runs, so validators see the final parsed value
     * `:validate` - `fn value -> :ok | {:error, msg} end`
 
   Boolean options automatically support `--no-<name>` negation (e.g. `--no-color`).
@@ -222,21 +241,34 @@ defmodule Cheer.Command.DSL do
   Extra positional arguments after `--` are collected into `args[:rest]`.
   """
   defmacro option(name, opts \\ []) do
-    {validate_ast, clean_opts} = Keyword.pop(opts, :validate)
+    {validate_ast, opts} = Keyword.pop(opts, :validate)
+    {parse_ast, clean_opts} = Keyword.pop(opts, :parse)
 
-    base =
+    validate_def =
       if validate_ast do
         fname = :"__cheer_validate_#{name}__"
 
         quote do
-          @cheer_options {unquote(name), unquote(clean_opts)}
           @cheer_has_validate unquote(name)
           def unquote(fname)(val), do: unquote(validate_ast).(val)
         end
-      else
+      end
+
+    parse_def =
+      if parse_ast do
+        fname = :"__cheer_parse_#{name}__"
+
         quote do
-          @cheer_options {unquote(name), unquote(clean_opts)}
+          @cheer_has_parse unquote(name)
+          def unquote(fname)(val), do: unquote(parse_ast).(val)
         end
+      end
+
+    base =
+      quote do
+        @cheer_options {unquote(name), unquote(clean_opts)}
+        unquote(validate_def)
+        unquote(parse_def)
       end
 
     quote do

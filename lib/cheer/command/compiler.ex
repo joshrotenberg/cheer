@@ -30,6 +30,7 @@ defmodule Cheer.Command.Compiler do
     options = Module.get_attribute(env.module, :cheer_options) |> Enum.reverse()
     subcommands = Module.get_attribute(env.module, :cheer_subcommands) |> Enum.reverse()
     has_validate = Module.get_attribute(env.module, :cheer_has_validate)
+    has_parse = Module.get_attribute(env.module, :cheer_has_parse)
     # Hook counters are incremented at macro-expansion time (see
     # Cheer.Command.DSL.next_hook_index/2). A command that declares no hooks of a
     # kind never writes the attribute, so default nil to 0.
@@ -70,37 +71,8 @@ defmodule Cheer.Command.Compiler do
     groups = build_groups(raw_groups)
 
     # Options: merge validate fns from generated functions
-    options_expr =
-      if has_validate == [] do
-        Macro.escape(options)
-      else
-        quote do
-          Enum.map(unquote(Macro.escape(options)), fn {n, o} ->
-            if n in unquote(has_validate) do
-              fname = :"__cheer_validate_#{n}__"
-              {n, Keyword.put(o, :validate, &apply(__MODULE__, fname, [&1]))}
-            else
-              {n, o}
-            end
-          end)
-        end
-      end
-
-    arguments_expr =
-      if has_validate == [] do
-        Macro.escape(arguments)
-      else
-        quote do
-          Enum.map(unquote(Macro.escape(arguments)), fn {n, o} ->
-            if n in unquote(has_validate) do
-              fname = :"__cheer_validate_#{n}__"
-              {n, Keyword.put(o, :validate, &apply(__MODULE__, fname, [&1]))}
-            else
-              {n, o}
-            end
-          end)
-        end
-      end
+    options_expr = wrap_validate_and_parse(Macro.escape(options), has_validate, has_parse)
+    arguments_expr = wrap_validate_and_parse(Macro.escape(arguments), has_validate, has_parse)
 
     validators_expr = make_indexed_fns(:__cheer_cross_validate__, validator_count)
     before_run_expr = make_indexed_fns(:__cheer_before_run__, before_run_count)
@@ -138,6 +110,64 @@ defmodule Cheer.Command.Compiler do
           groups: unquote(Macro.escape(groups))
         }
       end
+    end
+  end
+
+  # Wires the generated __cheer_validate_<name>__/__cheer_parse_<name>__
+  # functions into the escaped options/arguments list at compile time.
+  # Branches on has_validate/has_parse being [] here (a compile-time list),
+  # rather than emitting a runtime `n in []` check unconditionally, which
+  # would always be false for a command using only one of the two features
+  # and trip the compiler's "will always evaluate to false" type warning.
+  defp wrap_validate_and_parse(escaped_items, [], []), do: escaped_items
+
+  defp wrap_validate_and_parse(escaped_items, has_validate, []) do
+    quote do
+      Enum.map(unquote(escaped_items), fn {n, o} ->
+        if n in unquote(has_validate) do
+          fname = :"__cheer_validate_#{n}__"
+          {n, Keyword.put(o, :validate, &apply(__MODULE__, fname, [&1]))}
+        else
+          {n, o}
+        end
+      end)
+    end
+  end
+
+  defp wrap_validate_and_parse(escaped_items, [], has_parse) do
+    quote do
+      Enum.map(unquote(escaped_items), fn {n, o} ->
+        if n in unquote(has_parse) do
+          fname = :"__cheer_parse_#{n}__"
+          {n, Keyword.put(o, :parse, &apply(__MODULE__, fname, [&1]))}
+        else
+          {n, o}
+        end
+      end)
+    end
+  end
+
+  defp wrap_validate_and_parse(escaped_items, has_validate, has_parse) do
+    quote do
+      Enum.map(unquote(escaped_items), fn {n, o} ->
+        o =
+          if n in unquote(has_validate) do
+            fname = :"__cheer_validate_#{n}__"
+            Keyword.put(o, :validate, &apply(__MODULE__, fname, [&1]))
+          else
+            o
+          end
+
+        o =
+          if n in unquote(has_parse) do
+            fname = :"__cheer_parse_#{n}__"
+            Keyword.put(o, :parse, &apply(__MODULE__, fname, [&1]))
+          else
+            o
+          end
+
+        {n, o}
+      end)
     end
   end
 
