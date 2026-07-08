@@ -30,6 +30,7 @@ defmodule Cheer.Command.Compiler do
     options = Module.get_attribute(env.module, :cheer_options) |> Enum.reverse()
     subcommands = Module.get_attribute(env.module, :cheer_subcommands) |> Enum.reverse()
     has_validate = Module.get_attribute(env.module, :cheer_has_validate)
+    has_parse = Module.get_attribute(env.module, :cheer_has_parse)
     # Hook counters are incremented at macro-expansion time (see
     # Cheer.Command.DSL.next_hook_index/2). A command that declares no hooks of a
     # kind never writes the attribute, so default nil to 0.
@@ -69,38 +70,9 @@ defmodule Cheer.Command.Compiler do
     # Build groups map: %{group_name => %{opts: [...], members: [...]}}
     groups = build_groups(raw_groups)
 
-    # Options: merge validate fns from generated functions
-    options_expr =
-      if has_validate == [] do
-        Macro.escape(options)
-      else
-        quote do
-          Enum.map(unquote(Macro.escape(options)), fn {n, o} ->
-            if n in unquote(has_validate) do
-              fname = :"__cheer_validate_#{n}__"
-              {n, Keyword.put(o, :validate, &apply(__MODULE__, fname, [&1]))}
-            else
-              {n, o}
-            end
-          end)
-        end
-      end
-
-    arguments_expr =
-      if has_validate == [] do
-        Macro.escape(arguments)
-      else
-        quote do
-          Enum.map(unquote(Macro.escape(arguments)), fn {n, o} ->
-            if n in unquote(has_validate) do
-              fname = :"__cheer_validate_#{n}__"
-              {n, Keyword.put(o, :validate, &apply(__MODULE__, fname, [&1]))}
-            else
-              {n, o}
-            end
-          end)
-        end
-      end
+    # Merge the generated :validate / :parse accessor fns back into the param opts.
+    options_expr = merge_accessors(options, has_validate, has_parse)
+    arguments_expr = merge_accessors(arguments, has_validate, has_parse)
 
     validators_expr = make_indexed_fns(:__cheer_cross_validate__, validator_count)
     before_run_expr = make_indexed_fns(:__cheer_before_run__, before_run_count)
@@ -137,6 +109,29 @@ defmodule Cheer.Command.Compiler do
           persistent_before_run: unquote(persistent_before_expr),
           groups: unquote(Macro.escape(groups))
         }
+      end
+    end
+  end
+
+  # Reattach generated :validate / :parse accessor fns to the {name, opts} list.
+  defp merge_accessors(params, has_validate, has_parse) do
+    if has_validate == [] and has_parse == [] do
+      Macro.escape(params)
+    else
+      quote do
+        Enum.map(unquote(Macro.escape(params)), fn {n, o} ->
+          o =
+            if n in unquote(has_validate),
+              do: Keyword.put(o, :validate, &apply(__MODULE__, :"__cheer_validate_#{n}__", [&1])),
+              else: o
+
+          o =
+            if n in unquote(has_parse),
+              do: Keyword.put(o, :parse, &apply(__MODULE__, :"__cheer_parse_#{n}__", [&1])),
+              else: o
+
+          {n, o}
+        end)
       end
     end
   end

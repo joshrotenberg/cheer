@@ -308,7 +308,8 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with :ok <- validate_num_args(num_args_values, all_options),
+          with {:ok, args} <- apply_parsers(args, all_options ++ meta.arguments),
+               :ok <- validate_num_args(num_args_values, all_options),
                :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
@@ -377,7 +378,8 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with :ok <- validate_num_args(num_args_values, all_options),
+          with {:ok, args} <- apply_parsers(args, all_options ++ meta.arguments),
+               :ok <- validate_num_args(num_args_values, all_options),
                :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
@@ -648,6 +650,40 @@ defmodule Cheer.Router do
   defp coerce_env(value, _), do: value
 
   # -- Per-param validation --
+
+  # -- Custom parsers (:parse) --
+
+  # Apply each param's :parse fn to its value, transforming it into a domain
+  # value. Runs before validation so :choices/:validate see the parsed value. A
+  # list value (multi, num_args, value_delimiter) is parsed element-wise.
+  defp apply_parsers(args, params) do
+    Enum.reduce_while(params, {:ok, args}, fn {name, opts}, {:ok, acc} ->
+      with fun when is_function(fun, 1) <- Keyword.get(opts, :parse),
+           {:ok, value} <- Map.fetch(acc, name) do
+        case apply_parse_value(fun, value) do
+          {:ok, parsed} -> {:cont, {:ok, Map.put(acc, name, parsed)}}
+          {:error, msg} -> {:halt, {:error, "--#{flag_string(name)}: #{msg}"}}
+        end
+      else
+        _ -> {:cont, {:ok, acc}}
+      end
+    end)
+  end
+
+  defp apply_parse_value(fun, values) when is_list(values) do
+    Enum.reduce_while(values, {:ok, []}, fn v, {:ok, acc} ->
+      case fun.(v) do
+        {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+    |> case do
+      {:ok, list} -> {:ok, Enum.reverse(list)}
+      err -> err
+    end
+  end
+
+  defp apply_parse_value(fun, value), do: fun.(value)
 
   defp validate_params(args, options) do
     Enum.reduce_while(options, :ok, fn {name, opts}, _acc ->
