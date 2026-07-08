@@ -97,7 +97,10 @@ defmodule Cheer do
       arguments: Enum.map(meta.arguments, fn {name, opts} -> {name, opts} end),
       options: Enum.map(meta.options, fn {name, opts} -> {name, opts} end),
       groups: Map.get(meta, :groups, %{}),
-      subcommands: Enum.map(meta.subcommands, &tree/1)
+      subcommands:
+        meta.subcommands
+        |> Enum.reject(fn sub -> Map.get(sub.__cheer_meta__(), :hide, false) end)
+        |> Enum.map(&tree/1)
     }
   end
 end

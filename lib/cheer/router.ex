@@ -912,10 +912,17 @@ defmodule Cheer.Router do
   defp print_unknown_command(meta, token) do
     IO.puts("error: unknown command '#{token}'")
 
+    # Hidden commands stay dispatchable but are not advertised in suggestions or
+    # the available-commands list.
+    visible =
+      Enum.reject(meta.subcommands, fn sub ->
+        Map.get(sub.__cheer_meta__(), :hide, false)
+      end)
+
     # "Did you mean?" suggestion
-    if meta.subcommands != [] do
+    if visible != [] do
       names =
-        Enum.flat_map(meta.subcommands, fn sub ->
+        Enum.flat_map(visible, fn sub ->
           sub_meta = sub.__cheer_meta__()
           [sub_meta.name | Map.get(sub_meta, :aliases, [])]
         end)
@@ -927,7 +934,7 @@ defmodule Cheer.Router do
 
       IO.puts("\nAvailable commands:")
 
-      for sub <- meta.subcommands do
+      for sub <- visible do
         sub_meta = sub.__cheer_meta__()
         IO.puts("  #{sub_meta.name}")
       end
