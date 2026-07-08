@@ -240,7 +240,7 @@ defmodule Cheer.Router do
       OptionParser.parse(argv, strict: option_parser_opts, aliases: option_aliases)
 
     if invalid != [] do
-      print_invalid_options_error(command, invalid, opts)
+      print_invalid_options_error(command, invalid, opts, all_options)
       :handled
     else
       args = apply_defaults(all_options)
@@ -321,7 +321,7 @@ defmodule Cheer.Router do
       OptionParser.parse_head(argv, strict: option_parser_opts, aliases: option_aliases)
 
     if invalid != [] do
-      print_invalid_options_error(command, invalid, opts)
+      print_invalid_options_error(command, invalid, opts, all_options)
       :handled
     else
       args = apply_defaults(all_options)
@@ -936,10 +936,29 @@ defmodule Cheer.Router do
     Cheer.Help.print(command, opts)
   end
 
-  defp print_invalid_options_error(command, invalid, opts) do
+  defp print_invalid_options_error(command, invalid, opts, all_options) do
     flags = Enum.map_join(invalid, ", ", fn {flag, _} -> flag end)
     IO.puts("error: unknown option(s): #{flags}")
+
+    candidates = option_name_candidates(all_options)
+
+    for {flag, _value} <- invalid do
+      with "--" <> name <- flag,
+           suggestion when not is_nil(suggestion) <- suggest(name, candidates) do
+        IO.puts("\n  Did you mean '--#{suggestion}'?")
+      else
+        _ -> :ok
+      end
+    end
+
     IO.puts("")
     Cheer.Help.print(command, opts)
+  end
+
+  defp option_name_candidates(all_options) do
+    Enum.flat_map(all_options, fn {name, opts} ->
+      aliases = Keyword.get(opts, :aliases, [])
+      [flag_string(name) | Enum.map(aliases, &flag_string/1)]
+    end)
   end
 end

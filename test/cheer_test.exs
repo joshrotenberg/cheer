@@ -416,6 +416,35 @@ defmodule CheerTest do
 
       assert output =~ "error: unknown option(s)"
     end
+
+    test "suggests the closest declared option name for a typo'd flag" do
+      output =
+        capture_io(fn ->
+          Cheer.run(CheerTest.TestOptAliases, ["--colr", "red"])
+        end)
+
+      assert output =~ "error: unknown option(s): --colr"
+      assert output =~ "Did you mean '--color'?"
+    end
+
+    test "suggests an alias when it's the closest match" do
+      output =
+        capture_io(fn ->
+          Cheer.run(CheerTest.TestOptAliases, ["--colour-", "red"])
+        end)
+
+      assert output =~ "Did you mean '--colour'?"
+    end
+
+    test "prints no suggestion when nothing is close enough" do
+      output =
+        capture_io(fn ->
+          Cheer.run(CheerTest.TestOptAliases, ["--zzzzzzzz", "red"])
+        end)
+
+      assert output =~ "error: unknown option(s): --zzzzzzzz"
+      refute output =~ "Did you mean"
+    end
   end
 
   # -- Environment variable fallback -------------------------------------------
