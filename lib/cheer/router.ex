@@ -227,12 +227,16 @@ defmodule Cheer.Router do
     all_options = meta.options ++ inherited_globals
 
     # Options declared with `num_args:` accept several values per flag, which
-    # OptionParser cannot express. Pull them (and their value tokens) out of
-    # argv up front, then parse the remainder normally.
+    # OptionParser cannot express. Options with `allow_hyphen_values:` accept a
+    # value starting with `-`, which OptionParser would read as a flag. Pull both
+    # (and their value tokens) out of argv up front, then parse the remainder.
     {num_args_values, argv} = extract_num_args(argv, all_options)
+    {hyphen_values, argv} = extract_hyphen_values(argv, all_options)
 
     parser_options =
-      Enum.reject(all_options, fn {_name, o} -> Keyword.has_key?(o, :num_args) end)
+      Enum.reject(all_options, fn {_name, o} = opt ->
+        Keyword.has_key?(o, :num_args) or single_value_hyphen_opt?(opt)
+      end)
 
     {option_parser_opts, option_aliases} = build_option_parser_spec(parser_options)
 
@@ -248,6 +252,7 @@ defmodule Cheer.Router do
       args = apply_env_vars(args, all_options)
       args = Map.merge(args, parsed_map)
       args = Map.merge(args, num_args_values)
+      args = Map.merge(args, hyphen_values)
 
       {declared_positional, rest_args} = Enum.split(positional, length(meta.arguments))
 
@@ -268,7 +273,10 @@ defmodule Cheer.Router do
       # Map.has_key?/2 so that defaults, :count (0), and :multi ([]) do not read
       # as "provided". Env fallback is intentionally not counted as user input.
       provided =
-        MapSet.new(Map.keys(parsed_map) ++ Map.keys(num_args_values) ++ supplied_positional)
+        MapSet.new(
+          Map.keys(parsed_map) ++
+            Map.keys(num_args_values) ++ Map.keys(hyphen_values) ++ supplied_positional
+        )
 
       args =
         case meta[:trailing_var_arg] do
@@ -729,6 +737,53 @@ defmodule Cheer.Router do
     end
   end
 
+  # Options with `allow_hyphen_values: true` that take a single value (not
+  # num_args, boolean, or count) must have their value pulled out before
+  # OptionParser, which would otherwise treat a `-`-prefixed value as a flag.
+  defp extract_hyphen_values(argv, options) do
+    hyphen_opts = Enum.filter(options, &single_value_hyphen_opt?/1)
+
+    if hyphen_opts == [] do
+      {%{}, argv}
+    else
+      do_extract_hyphen_values(argv, num_args_lookup(hyphen_opts), %{}, [])
+    end
+  end
+
+  defp single_value_hyphen_opt?({_name, o}) do
+    Keyword.get(o, :allow_hyphen_values, false) and
+      not Keyword.has_key?(o, :num_args) and
+      Keyword.get(o, :type, :string) not in [:boolean, :count]
+  end
+
+  defp do_extract_hyphen_values([], _lookup, collected, residual),
+    do: {collected, Enum.reverse(residual)}
+
+  defp do_extract_hyphen_values(["--" | rest], _lookup, collected, residual),
+    do: {collected, Enum.reverse(residual) ++ ["--" | rest]}
+
+  defp do_extract_hyphen_values([token | rest], lookup, collected, residual) do
+    case num_args_flag(token, lookup) do
+      {{name, opts}, nil} ->
+        case rest do
+          [value | rest2] ->
+            collected = Map.put(collected, name, coerce_arg(value, opts))
+            do_extract_hyphen_values(rest2, lookup, collected, residual)
+
+          [] ->
+            # Flag with no following value: leave it for the normal parse path.
+            do_extract_hyphen_values([], lookup, collected, [token | residual])
+        end
+
+      {{name, opts}, inline} ->
+        collected = Map.put(collected, name, coerce_arg(inline, opts))
+        do_extract_hyphen_values(rest, lookup, collected, residual)
+
+      :nomatch ->
+        do_extract_hyphen_values(rest, lookup, collected, [token | residual])
+    end
+  end
+
   defp num_args_lookup(num_args_opts) do
     Enum.flat_map(num_args_opts, fn {name, opts} = entry ->
       long = [{"--#{flag_string(name)}", entry}]
@@ -760,8 +815,11 @@ defmodule Cheer.Router do
 
         {raw_values, rest2} =
           case inline do
-            nil -> take_num_args_values(rest, max, [])
-            value -> {[value], rest}
+            nil ->
+              take_num_args_values(rest, max, [], Keyword.get(opts, :allow_hyphen_values, false))
+
+            value ->
+              {[value], rest}
           end
 
         values = Enum.map(raw_values, &coerce_arg(&1, opts))
@@ -793,21 +851,27 @@ defmodule Cheer.Router do
     end
   end
 
-  defp take_num_args_values(tokens, max, acc) when length(acc) >= max,
+  defp take_num_args_values(tokens, max, acc, _allow_hyphen?) when length(acc) >= max,
     do: {Enum.reverse(acc), tokens}
 
-  defp take_num_args_values([], _max, acc), do: {Enum.reverse(acc), []}
+  defp take_num_args_values([], _max, acc, _allow_hyphen?), do: {Enum.reverse(acc), []}
 
-  defp take_num_args_values(["--" | _] = tokens, _max, acc),
+  defp take_num_args_values(["--" | _] = tokens, _max, acc, _allow_hyphen?),
     do: {Enum.reverse(acc), tokens}
 
-  defp take_num_args_values([token | rest], max, acc) do
-    if String.starts_with?(token, "-") and token != "-" do
+  defp take_num_args_values([token | rest], max, acc, allow_hyphen?) do
+    # Stop at a flag-looking token, unless the option opted into hyphen values or
+    # the token is a negative number (always a value in a num_args context, never
+    # a flag).
+    if flag_like?(token) and not allow_hyphen? and not negative_number?(token) do
       {Enum.reverse(acc), [token | rest]}
     else
-      take_num_args_values(rest, max, [token | acc])
+      take_num_args_values(rest, max, [token | acc], allow_hyphen?)
     end
   end
+
+  defp flag_like?(token), do: String.starts_with?(token, "-") and token != "-"
+  defp negative_number?(token), do: Regex.match?(~r/^-\d+(\.\d+)?$/, token)
 
   defp validate_num_args(num_args_values, options) do
     Enum.reduce_while(num_args_values, :ok, fn {name, values}, _acc ->

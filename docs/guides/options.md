@@ -73,6 +73,24 @@ range is a usage error:
 This is distinct from `:multi`, which repeats the whole flag (`--tag a --tag b`)
 rather than consuming multiple tokens after one flag.
 
+## Hyphen-leading values (`:allow_hyphen_values`)
+
+A value that starts with `-` normally looks like a flag, so it is rejected.
+Negative numbers are always accepted (`--range -5 5`). For other hyphen-leading
+values, set `:allow_hyphen_values`:
+
+```elixir
+option :pattern, type: :string, allow_hyphen_values: true
+# --pattern -v   ->  args[:pattern] == "-v"
+
+option :range, type: :integer, num_args: 2, allow_hyphen_values: true
+# --range -a -b  ->  args[:range] == ["-a", "-b"]
+```
+
+A single-value option consumes exactly the next token as its value, so a
+following flag is still parsed normally (`--pattern x --verbose`). With
+`:num_args`, collection consumes hyphen-leading tokens up to the declared count.
+
 ## Aliases (long-form)
 
 ```elixir
