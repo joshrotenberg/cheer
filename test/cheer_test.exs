@@ -2648,4 +2648,44 @@ defmodule CheerTest do
       assert output =~ "error: unknown command 'surprise'"
     end
   end
+
+  defmodule TestExternalSubNumArgs do
+    use Cheer.Command
+
+    command "runner" do
+      about("External dispatcher with a num_args parent option")
+      external_subcommands(true)
+      option(:point, type: :integer, num_args: 2, short: :p, help: "Two coords")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "num_args combined with external_subcommands (issue #66)" do
+    test "a num_args parent option before the external token collects all its values" do
+      assert {:ok, args} = Cheer.run(TestExternalSubNumArgs, ["--point", "1", "2", "foo"])
+      assert args[:point] == [1, 2]
+      assert args[:external_subcommand] == {"foo", []}
+    end
+
+    test "too few values for the num_args option is a usage error" do
+      output = capture_io(fn -> Cheer.run(TestExternalSubNumArgs, ["--point", "1"]) end)
+      assert output =~ "--point expects 2 value(s), got 1"
+    end
+
+    test "a same-named flag inside the external subcommand's own args is left untouched" do
+      assert {:ok, args} =
+               Cheer.run(TestExternalSubNumArgs, ["foo", "--point", "1", "2", "3"])
+
+      assert args[:external_subcommand] == {"foo", ["--point", "1", "2", "3"]}
+      refute Map.has_key?(args, :point)
+    end
+
+    test "short-flag num_args option still collects before the external token" do
+      assert {:ok, args} = Cheer.run(TestExternalSubNumArgs, ["-p", "3", "4", "bar", "baz"])
+      assert args[:point] == [3, 4]
+      assert args[:external_subcommand] == {"bar", ["baz"]}
+    end
+  end
 end

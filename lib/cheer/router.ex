@@ -328,7 +328,19 @@ defmodule Cheer.Router do
       end)
 
     all_options = meta.options ++ inherited_globals
-    {option_parser_opts, option_aliases} = build_option_parser_spec(all_options)
+
+    # Same rationale as parse_standard: OptionParser can only bind one value
+    # per flag, so num_args options are pulled out before the flag ever
+    # reaches it. Uses the parse_head variant, which stops consuming at the
+    # first genuine positional (the external subcommand name) instead of
+    # scanning the whole argv, so it never reaches into the subcommand's own
+    # arguments looking for same-named flags.
+    {num_args_values, argv} = extract_num_args_head(argv, all_options)
+
+    parser_options =
+      Enum.reject(all_options, fn {_name, o} -> Keyword.has_key?(o, :num_args) end)
+
+    {option_parser_opts, option_aliases} = build_option_parser_spec(parser_options)
 
     {parsed, positional, invalid} =
       OptionParser.parse_head(argv, strict: option_parser_opts, aliases: option_aliases)
@@ -341,6 +353,7 @@ defmodule Cheer.Router do
       args = apply_defaults(all_options)
       args = apply_env_vars(args, all_options)
       args = Map.merge(args, parsed_map)
+      args = Map.merge(args, num_args_values)
 
       args =
         case positional do
@@ -348,7 +361,7 @@ defmodule Cheer.Router do
           [name | rest] -> Map.put(args, :external_subcommand, {name, rest})
         end
 
-      provided = MapSet.new(Map.keys(parsed_map))
+      provided = MapSet.new(Map.keys(parsed_map) ++ Map.keys(num_args_values))
 
       missing = missing_required_options(all_options, args)
 
@@ -358,7 +371,8 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with :ok <- validate_conditional_required(args, all_options, provided),
+          with :ok <- validate_num_args(num_args_values, all_options),
+               :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
                :ok <- validate_params(args, all_options),
@@ -764,6 +778,51 @@ defmodule Cheer.Router do
 
       :nomatch ->
         do_extract_num_args(rest, lookup, collected, [token | residual])
+    end
+  end
+
+  # parse_head variant for external_subcommands: true. Everything from the
+  # first genuine positional token onward is the external subcommand's own
+  # argv and must be left completely untouched — including any of its tokens
+  # that happen to share a flag name with one of *our* num_args options.
+  defp extract_num_args_head(argv, options) do
+    num_args_opts = Enum.filter(options, fn {_name, o} -> Keyword.has_key?(o, :num_args) end)
+
+    if num_args_opts == [] do
+      {%{}, argv}
+    else
+      do_extract_num_args_head(argv, num_args_lookup(num_args_opts), %{}, [])
+    end
+  end
+
+  defp do_extract_num_args_head([], _lookup, collected, residual),
+    do: {collected, Enum.reverse(residual)}
+
+  defp do_extract_num_args_head(["--" | _] = tokens, _lookup, collected, residual),
+    do: {collected, Enum.reverse(residual) ++ tokens}
+
+  defp do_extract_num_args_head([token | rest], lookup, collected, residual) do
+    case num_args_flag(token, lookup) do
+      {{name, opts}, inline} ->
+        {_min, max} = num_args_bounds(Keyword.fetch!(opts, :num_args))
+
+        {raw_values, rest2} =
+          case inline do
+            nil -> take_num_args_values(rest, max, [])
+            value -> {[value], rest}
+          end
+
+        values = Enum.map(raw_values, &coerce_arg(&1, opts))
+        do_extract_num_args_head(rest2, lookup, Map.put(collected, name, values), residual)
+
+      :nomatch ->
+        if String.starts_with?(token, "-") do
+          do_extract_num_args_head(rest, lookup, collected, [token | residual])
+        else
+          # First genuine positional: this is the external subcommand name.
+          # Stop consuming; hand it and everything after back untouched.
+          {collected, Enum.reverse(residual) ++ [token | rest]}
+        end
     end
   end
 
