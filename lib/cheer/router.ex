@@ -337,7 +337,15 @@ defmodule Cheer.Router do
       end)
 
     all_options = meta.options ++ inherited_globals
-    {option_parser_opts, option_aliases} = build_option_parser_spec(all_options)
+
+    # Pull num_args flags out first (head mode: stop at the external subcommand),
+    # then parse the remainder. OptionParser cannot express multi-value flags.
+    {num_args_values, argv} = extract_num_args(argv, all_options, true)
+
+    parser_options =
+      Enum.reject(all_options, fn {_name, o} -> Keyword.has_key?(o, :num_args) end)
+
+    {option_parser_opts, option_aliases} = build_option_parser_spec(parser_options)
 
     {parsed, positional, invalid} =
       OptionParser.parse_head(argv, strict: option_parser_opts, aliases: option_aliases)
@@ -350,6 +358,7 @@ defmodule Cheer.Router do
       args = apply_defaults(all_options)
       args = apply_env_vars(args, all_options)
       args = Map.merge(args, parsed_map)
+      args = Map.merge(args, num_args_values)
 
       args =
         case positional do
@@ -357,7 +366,7 @@ defmodule Cheer.Router do
           [name | rest] -> Map.put(args, :external_subcommand, {name, rest})
         end
 
-      provided = MapSet.new(Map.keys(parsed_map))
+      provided = MapSet.new(Map.keys(parsed_map) ++ Map.keys(num_args_values))
 
       missing = missing_required_options(all_options, args)
 
@@ -367,7 +376,8 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with :ok <- validate_conditional_required(args, all_options, provided),
+          with :ok <- validate_num_args(num_args_values, all_options),
+               :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
                # Include arguments so argument-level :validate and :choices run.
@@ -587,6 +597,17 @@ defmodule Cheer.Router do
   end
 
   defp coerce_env(value, :boolean), do: value in ["true", "1", "yes"]
+
+  # A :count option is always an integer (its default is 0), so an env fallback
+  # must be coerced too. An unparseable value floors to 0 rather than leaking a
+  # string into run/2.
+  defp coerce_env(value, :count) do
+    case Integer.parse(value) do
+      {n, ""} -> n
+      _ -> 0
+    end
+  end
+
   defp coerce_env(value, _), do: value
 
   # -- Per-param validation --
@@ -727,13 +748,17 @@ defmodule Cheer.Router do
   # tokens out of argv and returns `{%{point: [1, 2, 3]}, residual_argv}`.
   # Collection stops at the next flag-looking token (one starting with "-"),
   # at "--", or once `max` values are taken.
-  defp extract_num_args(argv, options) do
+  #
+  # `head?` mirrors OptionParser.parse_head: when true (external_subcommands),
+  # extraction stops at the first positional token so the external subcommand
+  # name and its args are left untouched for parse_head.
+  defp extract_num_args(argv, options, head? \\ false) do
     num_args_opts = Enum.filter(options, fn {_name, o} -> Keyword.has_key?(o, :num_args) end)
 
     if num_args_opts == [] do
       {%{}, argv}
     else
-      do_extract_num_args(argv, num_args_lookup(num_args_opts), %{}, [])
+      do_extract_num_args(argv, num_args_lookup(num_args_opts), %{}, [], head?)
     end
   end
 
@@ -802,13 +827,13 @@ defmodule Cheer.Router do
     |> Map.new()
   end
 
-  defp do_extract_num_args([], _lookup, collected, residual),
+  defp do_extract_num_args([], _lookup, collected, residual, _head?),
     do: {collected, Enum.reverse(residual)}
 
-  defp do_extract_num_args(["--" | rest], _lookup, collected, residual),
+  defp do_extract_num_args(["--" | rest], _lookup, collected, residual, _head?),
     do: {collected, Enum.reverse(residual) ++ ["--" | rest]}
 
-  defp do_extract_num_args([token | rest], lookup, collected, residual) do
+  defp do_extract_num_args([token | rest] = all, lookup, collected, residual, head?) do
     case num_args_flag(token, lookup) do
       {{name, opts}, inline} ->
         {_min, max} = num_args_bounds(Keyword.fetch!(opts, :num_args))
@@ -823,10 +848,17 @@ defmodule Cheer.Router do
           end
 
         values = Enum.map(raw_values, &coerce_arg(&1, opts))
-        do_extract_num_args(rest2, lookup, Map.put(collected, name, values), residual)
+        do_extract_num_args(rest2, lookup, Map.put(collected, name, values), residual, head?)
 
       :nomatch ->
-        do_extract_num_args(rest, lookup, collected, [token | residual])
+        # In head mode the first positional is the external subcommand: stop and
+        # hand it (plus the rest) to parse_head. Option-looking tokens are parent
+        # flags, so keep scanning past them.
+        if head? and not String.starts_with?(token, "-") do
+          {collected, Enum.reverse(residual) ++ all}
+        else
+          do_extract_num_args(rest, lookup, collected, [token | residual], head?)
+        end
     end
   end
 

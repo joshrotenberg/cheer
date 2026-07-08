@@ -1340,6 +1340,17 @@ defmodule CheerTest do
     def run(args, _raw), do: {:ok, args}
   end
 
+  defmodule TestCountEnv do
+    use Cheer.Command
+
+    command "ce" do
+      option(:level, type: :count, env: "TEST_CHEER_LEVEL")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
   describe "count type" do
     test "single flag" do
       assert {:ok, args} = Cheer.run(TestCount, ["hello", "-v"])
@@ -1364,6 +1375,20 @@ defmodule CheerTest do
     test "help text shows repeatable" do
       output = capture_io(fn -> Cheer.run(TestCount, ["--help"]) end)
       assert output =~ "(repeatable)"
+    end
+
+    test "env fallback coerces to an integer (#67)" do
+      System.put_env("TEST_CHEER_LEVEL", "4")
+      assert {:ok, %{level: 4}} = Cheer.run(TestCountEnv, [])
+    after
+      System.delete_env("TEST_CHEER_LEVEL")
+    end
+
+    test "unparseable env fallback floors to 0 (#67)" do
+      System.put_env("TEST_CHEER_LEVEL", "nope")
+      assert {:ok, %{level: 0}} = Cheer.run(TestCountEnv, [])
+    after
+      System.delete_env("TEST_CHEER_LEVEL")
     end
   end
 
@@ -2808,6 +2833,52 @@ defmodule CheerTest do
     test "commands with subcommands and no external_subcommands still error on unknown tokens (regression)" do
       output = capture_io(fn -> Cheer.run(TestNoExternalSub, ["surprise"]) end)
       assert output =~ "error: unknown command 'surprise'"
+    end
+  end
+
+  # -- num_args with external_subcommands (#66) --------------------------------
+
+  defmodule TestExternalNumArgs do
+    use Cheer.Command
+
+    command "tool" do
+      about("External dispatcher with a num_args option")
+      external_subcommands(true)
+      option(:point, type: :integer, num_args: 2, help: "Two coords")
+      option(:verbose, type: :boolean, short: :v)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "num_args with external_subcommands (#66)" do
+    test "num_args flag before the external name is collected" do
+      assert {:ok, args} =
+               Cheer.run(TestExternalNumArgs, ["--point", "1", "2", "deploy", "--foo"])
+
+      assert args[:point] == [1, 2]
+      assert args[:external_subcommand] == {"deploy", ["--foo"]}
+    end
+
+    test "num_args mixes with other parent options before the external name" do
+      assert {:ok, args} =
+               Cheer.run(TestExternalNumArgs, ["--verbose", "--point", "5", "6", "deploy", "x"])
+
+      assert args[:verbose] == true
+      assert args[:point] == [5, 6]
+      assert args[:external_subcommand] == {"deploy", ["x"]}
+    end
+
+    test "a num_args flag after the external name is passed through, not consumed" do
+      assert {:ok, args} = Cheer.run(TestExternalNumArgs, ["deploy", "--point", "1", "2"])
+      assert args[:point] == nil
+      assert args[:external_subcommand] == {"deploy", ["--point", "1", "2"]}
+    end
+
+    test "an underprovided num_args flag is a usage error" do
+      output = capture_io(fn -> Cheer.run(TestExternalNumArgs, ["--point", "1"]) end)
+      assert output =~ "--point expects 2 value(s)"
     end
   end
 
