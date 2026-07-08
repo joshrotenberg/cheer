@@ -755,7 +755,7 @@ defmodule Cheer.Router do
 
         {raw_values, rest2} =
           case inline do
-            nil -> take_num_args_values(rest, max, [])
+            nil -> take_num_args_values(rest, max, [], opts)
             value -> {[value], rest}
           end
 
@@ -788,21 +788,31 @@ defmodule Cheer.Router do
     end
   end
 
-  defp take_num_args_values(tokens, max, acc) when length(acc) >= max,
+  defp take_num_args_values(tokens, max, acc, _opts) when length(acc) >= max,
     do: {Enum.reverse(acc), tokens}
 
-  defp take_num_args_values([], _max, acc), do: {Enum.reverse(acc), []}
+  defp take_num_args_values([], _max, acc, _opts), do: {Enum.reverse(acc), []}
 
-  defp take_num_args_values(["--" | _] = tokens, _max, acc),
+  defp take_num_args_values(["--" | _] = tokens, _max, acc, _opts),
     do: {Enum.reverse(acc), tokens}
 
-  defp take_num_args_values([token | rest], max, acc) do
-    if String.starts_with?(token, "-") and token != "-" do
+  defp take_num_args_values([token | rest], max, acc, opts) do
+    looks_like_flag? = String.starts_with?(token, "-") and token != "-"
+    allow_hyphen? = Keyword.get(opts, :allow_hyphen_values, false)
+
+    if looks_like_flag? and not allow_hyphen? and not numeric_looking?(token) do
       {Enum.reverse(acc), [token | rest]}
     else
-      take_num_args_values(rest, max, [token | acc])
+      take_num_args_values(rest, max, [token | acc], opts)
     end
   end
+
+  # A negative number ("-5", "-1.2") looks like a flag by prefix alone, but
+  # num_args collection should treat it as a value rather than stopping —
+  # otherwise `--range -5 5` can never supply a negative bound. Anything else
+  # that starts with "-" (e.g. "-foo") still requires the option to opt in
+  # via `allow_hyphen_values: true`.
+  defp numeric_looking?(token), do: Regex.match?(~r/^-\d+(\.\d+)?$/, token)
 
   defp validate_num_args(num_args_values, options) do
     Enum.reduce_while(num_args_values, :ok, fn {name, values}, _acc ->

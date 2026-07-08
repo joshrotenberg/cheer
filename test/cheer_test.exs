@@ -626,6 +626,56 @@ defmodule CheerTest do
       assert output =~ "(2 values)"
       assert output =~ "(1..3 values)"
     end
+
+    test "negative numeric values are always collected, even without allow_hyphen_values (issue #64)" do
+      assert {:ok, %{point: [-5, 5]}} = Cheer.run(TestNumArgs, ["--point", "-5", "5"])
+    end
+
+    test "a real flag after a num_args option still stops collection" do
+      output = capture_io(fn -> Cheer.run(TestNumArgs, ["--point", "-5", "--verbose"]) end)
+      assert output =~ "--point expects 2 value(s), got 1"
+    end
+
+    test "a plain string option (not num_args) already accepts a hyphen-prefixed value" do
+      assert {:ok, args} = Cheer.run(TestNumArgs, ["site", "--point", "1", "2"])
+      assert args[:label] == "site"
+    end
+  end
+
+  # -- allow_hyphen_values (issue #73) -----------------------------------------
+
+  defmodule TestAllowHyphenValues do
+    use Cheer.Command
+
+    command "coords" do
+      about("allow_hyphen_values")
+
+      option(:point, type: :string, num_args: 2, allow_hyphen_values: true, help: "Coords")
+      option(:strict, type: :string, num_args: 2, help: "No opt-in")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "allow_hyphen_values (issue #73)" do
+    test "collects non-numeric hyphen-prefixed tokens as values when opted in" do
+      assert {:ok, %{point: ["-foo", "-bar"]}} =
+               Cheer.run(TestAllowHyphenValues, ["--point", "-foo", "-bar"])
+    end
+
+    test "negative numbers still work without needing allow_hyphen_values" do
+      assert {:ok, %{strict: ["-5", "5"]}} =
+               Cheer.run(TestAllowHyphenValues, ["--strict", "-5", "5"])
+    end
+
+    test "a non-numeric hyphen-prefixed token without opt-in still stops collection" do
+      # "-foo" is left in argv rather than collected, so it now falls to
+      # OptionParser, which reports it as an unknown option rather than a
+      # missing num_args value -- either way, it's not silently swallowed.
+      output = capture_io(fn -> Cheer.run(TestAllowHyphenValues, ["--strict", "-foo", "5"]) end)
+      assert output =~ "error: unknown option(s)"
+    end
   end
 
   # -- Usage-failure return value (issue #49) ----------------------------------
