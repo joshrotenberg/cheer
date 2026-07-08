@@ -797,12 +797,17 @@ defmodule Cheer.Router do
     do: {Enum.reverse(acc), tokens}
 
   defp take_num_args_values([token | rest], max, acc) do
-    if String.starts_with?(token, "-") and token != "-" do
+    if String.starts_with?(token, "-") and token != "-" and not numeric_looking?(token) do
       {Enum.reverse(acc), [token | rest]}
     else
       take_num_args_values(rest, max, [token | acc])
     end
   end
+
+  # A negative number ("-5", "-1.2") looks like a flag by prefix alone, but
+  # num_args collection should treat it as a value rather than stopping —
+  # otherwise `--range -5 5` can never supply a negative bound.
+  defp numeric_looking?(token), do: Regex.match?(~r/^-\d+(\.\d+)?$/, token)
 
   defp validate_num_args(num_args_values, options) do
     Enum.reduce_while(num_args_values, :ok, fn {name, values}, _acc ->

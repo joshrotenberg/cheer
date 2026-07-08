@@ -626,6 +626,19 @@ defmodule CheerTest do
       assert output =~ "(2 values)"
       assert output =~ "(1..3 values)"
     end
+
+    test "negative numeric values are collected, not mistaken for flags (issue #64)" do
+      assert {:ok, %{point: [-5, 5]}} = Cheer.run(TestNumArgs, ["--point", "-5", "5"])
+    end
+
+    test "negative float values are collected as well" do
+      assert {:ok, %{tags: ["-1.5"]}} = Cheer.run(TestNumArgs, ["--tags", "-1.5"])
+    end
+
+    test "a real flag after a num_args option still stops collection" do
+      output = capture_io(fn -> Cheer.run(TestNumArgs, ["--point", "-5", "--verbose"]) end)
+      assert output =~ "--point expects 2 value(s), got 1"
+    end
   end
 
   # -- Usage-failure return value (issue #49) ----------------------------------
