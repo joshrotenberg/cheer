@@ -173,6 +173,16 @@ defmodule Cheer.Help do
   defp maybe_append(list, nil, _fun), do: list
   defp maybe_append(list, value, fun), do: list ++ [fun.(value)]
 
+  # Render a default for the "[default: ...]" suffix. Most defaults are strings
+  # or numbers; a value with no String.Chars implementation (a map) or a
+  # non-charlist list would otherwise raise while printing help, so fall back to
+  # inspect/1.
+  defp default_to_string(default) do
+    to_string(default)
+  rescue
+    _ -> inspect(default)
+  end
+
   defp sort_by_display_order(items) do
     items
     |> Enum.with_index()
@@ -251,7 +261,7 @@ defmodule Cheer.Help do
         "[choices: #{Enum.join(choices, ", ")}]"
       end)
       |> maybe_append(Keyword.get(opt_opts, :default), fn default ->
-        "[default: #{default}]"
+        "[default: #{default_to_string(default)}]"
       end)
       |> maybe_append(Keyword.get(opt_opts, :env), fn env ->
         "[env: #{env}]"
