@@ -2304,6 +2304,74 @@ defmodule CheerTest do
     end
   end
 
+  # -- Constraint provenance: defaults must not read as "provided" (#59) --------
+
+  defmodule TestProvenance do
+    use Cheer.Command
+
+    command "prov" do
+      # verbose (count, defaults to 0) and tags (multi, defaults to []) both
+      # carry values in the args map even when the user passes neither.
+      option(:verbose, type: :count, conflicts_with: :quiet)
+      option(:quiet, type: :boolean)
+
+      option(:tags, type: :string, multi: true)
+      option(:name, type: :string, requires: :tags)
+
+      option(:mode, type: :string, required_unless: :verbose)
+
+      group :fmt, mutually_exclusive: true do
+        option(:count_a, type: :count)
+        option(:flag_b, type: :boolean)
+      end
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "constraint provenance (#59)" do
+    test "conflicts_with does not fire against a defaulted (:count) option" do
+      assert {:ok, %{quiet: true, verbose: 0}} =
+               Cheer.run(TestProvenance, ["--quiet", "--mode", "x"])
+    end
+
+    test "conflicts_with still fires when both are user-supplied" do
+      out = capture_io(fn -> Cheer.run(TestProvenance, ["--quiet", "--verbose"]) end)
+      assert out =~ "--verbose cannot be used with --quiet"
+    end
+
+    test "requires fails when the required (:multi) target is only defaulted" do
+      out = capture_io(fn -> Cheer.run(TestProvenance, ["--name", "n", "--mode", "x"]) end)
+      assert out =~ "--name requires --tags"
+    end
+
+    test "requires is satisfied when the target is user-supplied" do
+      assert {:ok, _} = Cheer.run(TestProvenance, ["--name", "n", "--tags", "t", "--mode", "x"])
+    end
+
+    test "required_unless still requires when the dependency is only defaulted" do
+      out = capture_io(fn -> Cheer.run(TestProvenance, []) end)
+      assert out =~ "--mode is required unless --verbose is provided"
+    end
+
+    test "required_unless is satisfied when the dependency is user-supplied" do
+      assert {:ok, _} = Cheer.run(TestProvenance, ["--verbose"])
+    end
+
+    test "mutually_exclusive group does not fire when only one member is user-supplied" do
+      assert {:ok, %{flag_b: true, count_a: 0}} =
+               Cheer.run(TestProvenance, ["--flag-b", "--mode", "x"])
+    end
+
+    test "mutually_exclusive group still fires when two members are user-supplied" do
+      out =
+        capture_io(fn -> Cheer.run(TestProvenance, ["--flag-b", "--count-a", "--mode", "x"]) end)
+
+      assert out =~ "mutually exclusive"
+    end
+  end
+
   # -- Subcommand usage line (#37) ---------------------------------------------
 
   defmodule TestSubUsageLeaf do
