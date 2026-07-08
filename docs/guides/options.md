@@ -91,6 +91,23 @@ A single-value option consumes exactly the next token as its value, so a
 following flag is still parsed normally (`--pattern x --verbose`). With
 `:num_args`, collection consumes hyphen-leading tokens up to the declared count.
 
+## Delimited values (`:value_delimiter`)
+
+`:value_delimiter` splits one value on a string into a list:
+
+```elixir
+option :tags, type: :string, value_delimiter: ","
+# --tags a,b,c  ->  args[:tags] == ["a", "b", "c"]
+
+option :ids, type: :integer, value_delimiter: ","
+# --ids 1,2,3   ->  args[:ids] == [1, 2, 3]
+```
+
+Each element is coerced to the option's `:type` and validated against
+`:choices`. A string `:default` is split the same way, and it combines with
+`:multi` (each occurrence is split and the results flattened). This differs
+from `:num_args`, which reads several separate tokens after one flag.
+
 ## Aliases (long-form)
 
 ```elixir

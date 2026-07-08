@@ -253,6 +253,7 @@ defmodule Cheer.Router do
       args = Map.merge(args, parsed_map)
       args = Map.merge(args, num_args_values)
       args = Map.merge(args, hyphen_values)
+      args = apply_value_delimiters(args, all_options)
 
       {declared_positional, rest_args} = Enum.split(positional, length(meta.arguments))
 
@@ -582,6 +583,42 @@ defmodule Cheer.Router do
     end)
   end
 
+  # -- Value delimiter --
+
+  # Split value_delimiter options into a list and coerce each element. Runs after
+  # all value sources are merged, so it covers user-supplied values, env
+  # fallbacks, and string defaults uniformly. A :multi value (already a list) has
+  # each occurrence split and the result flattened.
+  defp apply_value_delimiters(args, options) do
+    Enum.reduce(options, args, fn {name, opts}, acc ->
+      case Keyword.get(opts, :value_delimiter) do
+        nil ->
+          acc
+
+        delim ->
+          case Map.fetch(acc, name) do
+            {:ok, value} -> Map.put(acc, name, split_delimited(value, delim, opts))
+            :error -> acc
+          end
+      end
+    end)
+  end
+
+  defp split_delimited(value, delim, opts) when is_binary(value) do
+    value |> String.split(delim) |> Enum.map(&coerce_arg(&1, opts))
+  end
+
+  defp split_delimited(values, delim, opts) when is_list(values) do
+    values
+    |> Enum.flat_map(fn
+      v when is_binary(v) -> String.split(v, delim)
+      v -> [v]
+    end)
+    |> Enum.map(&coerce_arg(&1, opts))
+  end
+
+  defp split_delimited(value, _delim, _opts), do: value
+
   defp coerce_env(value, :integer) do
     case Integer.parse(value) do
       {n, ""} -> n
@@ -635,7 +672,10 @@ defmodule Cheer.Router do
         :ok
 
       choices ->
-        if to_string(value) in Enum.map(choices, &to_string/1) do
+        allowed = Enum.map(choices, &to_string/1)
+        values = if is_list(value), do: value, else: [value]
+
+        if Enum.all?(values, &(to_string(&1) in allowed)) do
           :ok
         else
           {:error, "--#{name} must be one of: #{Enum.join(choices, ", ")}"}
@@ -943,7 +983,7 @@ defmodule Cheer.Router do
   defp build_option_parser_spec(options) do
     spec =
       Enum.map(options, fn {name, opts} ->
-        type = Keyword.get(opts, :type, :string)
+        type = parser_type(opts)
 
         if Keyword.get(opts, :multi, false) do
           {name, [type, :keep]}
@@ -958,7 +998,7 @@ defmodule Cheer.Router do
       options
       |> Enum.filter(fn {_name, opts} -> Keyword.has_key?(opts, :aliases) end)
       |> Enum.flat_map(fn {_name, opts} ->
-        type = Keyword.get(opts, :type, :string)
+        type = parser_type(opts)
 
         type_spec =
           if Keyword.get(opts, :multi, false), do: [type, :keep], else: type
@@ -972,6 +1012,17 @@ defmodule Cheer.Router do
       |> Enum.map(fn {name, opts} -> {Keyword.fetch!(opts, :short), name} end)
 
     {spec ++ alias_specs, aliases}
+  end
+
+  # value_delimiter options are parsed as raw strings so OptionParser does not
+  # try to coerce the whole "a,b,c" token; splitting and per-element coercion
+  # happen afterward in apply_value_delimiters/2.
+  defp parser_type(opts) do
+    if Keyword.has_key?(opts, :value_delimiter) do
+      :string
+    else
+      Keyword.get(opts, :type, :string)
+    end
   end
 
   defp build_parsed_map(parsed, options) do

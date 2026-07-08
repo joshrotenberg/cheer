@@ -202,6 +202,10 @@ defmodule Cheer.Command.DSL do
     * `:allow_hyphen_values` - `true` to accept a value that starts with `-`, such
       as `--pattern -v` or `--range -a -b` (with `num_args`). Without it, only
       negative numbers are accepted as hyphen-leading values.
+    * `:value_delimiter` - split a single value on this string into a list, e.g.
+      `value_delimiter: ","` makes `--tags a,b,c` yield `["a", "b", "c"]`. Each
+      element is coerced to `:type` and checked against `:choices`. Combines with
+      `:multi` (each occurrence is split and the results flattened).
     * `:env` - environment variable name to read as fallback
     * `:choices` - list of allowed values
     * `:help` - help text shown in `--help`

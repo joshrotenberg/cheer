@@ -3025,4 +3025,54 @@ defmodule CheerTest do
       assert output =~ "unknown option"
     end
   end
+
+  # -- value_delimiter (#70) ---------------------------------------------------
+
+  defmodule TestDelimiter do
+    use Cheer.Command
+
+    command "dl" do
+      option(:tags, type: :string, value_delimiter: ",")
+      option(:ids, type: :integer, value_delimiter: ",")
+      option(:colors, type: :string, value_delimiter: ",", choices: ["red", "green", "blue"])
+      option(:groups, type: :string, multi: true, value_delimiter: ",")
+      option(:def, type: :string, value_delimiter: ",", default: "x,y")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "value_delimiter (#70)" do
+    test "splits a single value into a list" do
+      assert {:ok, %{tags: ["a", "b", "c"]}} = Cheer.run(TestDelimiter, ["--tags", "a,b,c"])
+    end
+
+    test "coerces each element to the option type" do
+      assert {:ok, %{ids: [1, 2, 3]}} = Cheer.run(TestDelimiter, ["--ids", "1,2,3"])
+    end
+
+    test "works with the inline --flag=value form" do
+      assert {:ok, %{tags: ["x", "y"]}} = Cheer.run(TestDelimiter, ["--tags=x,y"])
+    end
+
+    test "accepts a delimited value whose elements are all valid choices" do
+      assert {:ok, %{colors: ["red", "green"]}} =
+               Cheer.run(TestDelimiter, ["--colors", "red,green"])
+    end
+
+    test "rejects a delimited value with an element outside the choices" do
+      output = capture_io(fn -> Cheer.run(TestDelimiter, ["--colors", "red,purple"]) end)
+      assert output =~ "must be one of"
+    end
+
+    test "combines with :multi, flattening each split occurrence" do
+      assert {:ok, %{groups: ["a", "b", "c", "d"]}} =
+               Cheer.run(TestDelimiter, ["--groups", "a,b", "--groups", "c,d"])
+    end
+
+    test "splits a string default the same way" do
+      assert {:ok, %{def: ["x", "y"]}} = Cheer.run(TestDelimiter, [])
+    end
+  end
 end
