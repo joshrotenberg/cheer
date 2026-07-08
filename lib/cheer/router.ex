@@ -84,13 +84,13 @@ defmodule Cheer.Router do
       first_is_subcommand ->
         dispatch_command(command, meta, argv, Keyword.put(opts, :parent_hooks, hooks), hooks)
 
-      "--help" in argv ->
+      flag_requested?(argv, ["--help"]) ->
         Cheer.Help.print(command, Keyword.put(opts, :long, true))
 
-      "-h" in argv ->
+      flag_requested?(argv, ["-h"]) ->
         Cheer.Help.print(command, opts)
 
-      "--version" in argv or "-V" in argv ->
+      flag_requested?(argv, ["--version", "-V"]) ->
         print_version(meta)
 
       match?(["help" | _], argv) ->
@@ -413,7 +413,8 @@ defmodule Cheer.Router do
         case match_required_if(Keyword.fetch!(opts, :required_if), args, provided) do
           {:match, dep, val} ->
             {:halt,
-             {:error, "--#{name} is required when --#{dep} is #{format_required_value(val)}"}}
+             {:error,
+              "--#{flag_string(name)} is required when --#{flag_string(dep)} is #{format_required_value(val)}"}}
 
           :no_match ->
             {:cont, :ok}
@@ -425,7 +426,9 @@ defmodule Cheer.Router do
         if any_present?(deps, provided) do
           {:cont, :ok}
         else
-          {:halt, {:error, "--#{name} is required unless #{format_dep_list(deps)} is provided"}}
+          {:halt,
+           {:error,
+            "--#{flag_string(name)} is required unless #{format_dep_list(deps)} is provided"}}
         end
 
       true ->
@@ -451,10 +454,10 @@ defmodule Cheer.Router do
   defp any_present?(names, provided) when is_list(names),
     do: Enum.any?(names, &MapSet.member?(provided, &1))
 
-  defp format_dep_list(name) when is_atom(name), do: "--#{name}"
+  defp format_dep_list(name) when is_atom(name), do: "--#{flag_string(name)}"
 
   defp format_dep_list(names) when is_list(names),
-    do: Enum.map_join(names, ", ", &"--#{&1}")
+    do: Enum.map_join(names, ", ", &"--#{flag_string(&1)}")
 
   defp format_required_value(val) when is_binary(val), do: "'#{val}'"
   defp format_required_value(val), do: inspect(val)
@@ -485,7 +488,7 @@ defmodule Cheer.Router do
 
     case Enum.find(conflicts, &MapSet.member?(provided, &1)) do
       nil -> :ok
-      other -> {:error, "--#{name} cannot be used with --#{other}"}
+      other -> {:error, "--#{flag_string(name)} cannot be used with --#{flag_string(other)}"}
     end
   end
 
@@ -494,7 +497,7 @@ defmodule Cheer.Router do
 
     case Enum.find(requires, &(not MapSet.member?(provided, &1))) do
       nil -> :ok
-      other -> {:error, "--#{name} requires --#{other}"}
+      other -> {:error, "--#{flag_string(name)} requires --#{flag_string(other)}"}
     end
   end
 
@@ -512,12 +515,12 @@ defmodule Cheer.Router do
 
       cond do
         Keyword.get(opts, :mutually_exclusive, false) and length(set_members) > 1 ->
-          flags = Enum.map_join(set_members, ", ", &"--#{&1}")
+          flags = Enum.map_join(set_members, ", ", &"--#{flag_string(&1)}")
           {:halt, {:error, "options #{flags} are mutually exclusive (group: #{name})"}}
 
         Keyword.get(opts, :co_occurring, false) and set_members != [] and
             length(set_members) != length(members) ->
-          flags = Enum.map_join(members, ", ", &"--#{&1}")
+          flags = Enum.map_join(members, ", ", &"--#{flag_string(&1)}")
           {:halt, {:error, "options #{flags} must be used together (group: #{name})"}}
 
         true ->
@@ -898,6 +901,17 @@ defmodule Cheer.Router do
         Map.put(acc, primary, value)
       end
     end)
+  end
+
+  # -- Help / version detection --
+
+  # True if one of `targets` appears before a `--` terminator. Everything after
+  # `--` is a literal positional, so `tool -- --help` treats --help as an arg
+  # rather than a help request (matching conventional CLI behavior).
+  defp flag_requested?(argv, targets) do
+    argv
+    |> Enum.take_while(&(&1 != "--"))
+    |> Enum.any?(&(&1 in targets))
   end
 
   # -- Output helpers --

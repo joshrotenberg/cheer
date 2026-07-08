@@ -94,8 +94,9 @@ defmodule Cheer do
     %{
       name: meta.name,
       about: meta.about,
-      arguments: Enum.map(meta.arguments, fn {name, opts} -> {name, opts} end),
-      options: Enum.map(meta.options, fn {name, opts} -> {name, opts} end),
+      arguments: Enum.reject(meta.arguments, &hidden?/1),
+      options: Enum.reject(meta.options, &hidden?/1),
+      trailing_var_arg: Map.get(meta, :trailing_var_arg),
       groups: Map.get(meta, :groups, %{}),
       subcommands:
         meta.subcommands
@@ -103,4 +104,6 @@ defmodule Cheer do
         |> Enum.map(&tree/1)
     }
   end
+
+  defp hidden?({_name, opts}), do: Keyword.get(opts, :hide, false)
 end
