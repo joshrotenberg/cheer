@@ -525,6 +525,56 @@ defmodule CheerTest do
     end
   end
 
+  # -- Argument-level validate and choices (#69 bug) ---------------------------
+
+  defmodule TestArgValidate do
+    use Cheer.Command
+
+    command "av" do
+      argument(:port,
+        type: :integer,
+        required: true,
+        validate: fn p -> if p > 0, do: :ok, else: {:error, "port must be positive"} end
+      )
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestArgChoices do
+    use Cheer.Command
+
+    command "ac" do
+      argument(:env, type: :string, required: true, choices: ["dev", "prod"])
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "argument-level validate and choices (#69)" do
+    test "argument :validate rejects an invalid value" do
+      out = capture_io(fn -> assert Cheer.run(TestArgValidate, ["-5"]) == {:error, :usage} end)
+      assert out =~ "port must be positive"
+    end
+
+    test "argument :validate accepts a valid value" do
+      assert {:ok, %{port: 8080}} = Cheer.run(TestArgValidate, ["8080"])
+    end
+
+    test "argument :choices rejects a value outside the set" do
+      out =
+        capture_io(fn -> assert Cheer.run(TestArgChoices, ["staging"]) == {:error, :usage} end)
+
+      assert out =~ "must be one of"
+    end
+
+    test "argument :choices accepts a value in the set" do
+      assert {:ok, %{env: "prod"}} = Cheer.run(TestArgChoices, ["prod"])
+    end
+  end
+
   # -- Non-literal opt values (issue #48) --------------------------------------
 
   defmodule TestSigilChoices do
