@@ -851,6 +851,59 @@ defmodule CheerTest do
     end
   end
 
+  defmodule TestFloatBoolArgs do
+    use Cheer.Command
+
+    command "fb" do
+      argument(:ratio, type: :float, required: true)
+      argument(:enabled, type: :boolean, required: true)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestFloatBoolEnv do
+    use Cheer.Command
+
+    command "fbe" do
+      option(:ratio, type: :float, env: "TEST_CHEER_RATIO")
+      option(:flag, type: :boolean, env: "TEST_CHEER_FLAG")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "float and boolean coercion for arguments and env vars (#69)" do
+    test "float argument is coerced to a float" do
+      assert {:ok, %{ratio: 1.5}} = Cheer.run(TestFloatBoolArgs, ["1.5", "true"])
+    end
+
+    test "an unparseable float argument stays a string" do
+      assert {:ok, %{ratio: "abc"}} = Cheer.run(TestFloatBoolArgs, ["abc", "true"])
+    end
+
+    test "boolean argument coerces truthy and falsy strings" do
+      assert {:ok, %{enabled: true}} = Cheer.run(TestFloatBoolArgs, ["1.0", "true"])
+      assert {:ok, %{enabled: false}} = Cheer.run(TestFloatBoolArgs, ["1.0", "false"])
+    end
+
+    test "float env fallback is coerced to a float" do
+      System.put_env("TEST_CHEER_RATIO", "2.5")
+      assert {:ok, %{ratio: 2.5}} = Cheer.run(TestFloatBoolEnv, [])
+    after
+      System.delete_env("TEST_CHEER_RATIO")
+    end
+
+    test "boolean env fallback is coerced to a boolean" do
+      System.put_env("TEST_CHEER_FLAG", "true")
+      assert {:ok, %{flag: true}} = Cheer.run(TestFloatBoolEnv, [])
+    after
+      System.delete_env("TEST_CHEER_FLAG")
+    end
+  end
+
   # -- Lifecycle hooks ---------------------------------------------------------
 
   defmodule TestHooksLeaf do
@@ -1206,6 +1259,43 @@ defmodule CheerTest do
         end)
 
       assert output =~ "test interactive shell"
+    end
+
+    test "commands built-in prints the command tree (#69)" do
+      output =
+        capture_io("commands\nexit\n", fn -> Cheer.Repl.start(TestRoot, prog: "test") end)
+
+      assert output =~ "greet"
+    end
+
+    test "? is an alias for help (#69)" do
+      output = capture_io("?\nexit\n", fn -> Cheer.Repl.start(TestRoot, prog: "test") end)
+      assert output =~ "COMMANDS:"
+    end
+
+    test "quit exits (#69)" do
+      output = capture_io("quit\n", fn -> Cheer.Repl.start(TestRoot, prog: "test") end)
+      assert output =~ "Bye!"
+    end
+
+    test "blank input lines are skipped (#69)" do
+      output = capture_io("\n\nexit\n", fn -> Cheer.Repl.start(TestRoot, prog: "test") end)
+      assert output =~ "Bye!"
+    end
+
+    test "EOF exits cleanly (#69)" do
+      output = capture_io("", fn -> Cheer.Repl.start(TestRoot, prog: "test") end)
+      assert output =~ "Bye!"
+    end
+
+    test "a custom :banner replaces the default (#69)" do
+      output =
+        capture_io("exit\n", fn ->
+          Cheer.Repl.start(TestRoot, prog: "test", banner: "WELCOME BANNER")
+        end)
+
+      assert output =~ "WELCOME BANNER"
+      refute output =~ "interactive shell"
     end
   end
 
