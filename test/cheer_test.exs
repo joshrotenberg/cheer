@@ -1055,6 +1055,30 @@ defmodule CheerTest do
       assert script =~ "-p"
     end
 
+    test "bash renders multi-word option names as kebab-case, matching the parser (issue #65)" do
+      script = Cheer.Completion.generate(CheerTest.TestUnderscoreOption, :bash, prog: "under")
+      assert script =~ "--base-port"
+      assert script =~ "--replicas-per-master"
+      refute script =~ "--base_port"
+      refute script =~ "--replicas_per_master"
+    end
+
+    test "zsh renders multi-word option names as kebab-case, matching the parser (issue #65)" do
+      script = Cheer.Completion.generate(CheerTest.TestUnderscoreOption, :zsh, prog: "under")
+      assert script =~ "--base-port"
+      assert script =~ "--replicas-per-master"
+      refute script =~ "--base_port"
+      refute script =~ "--replicas_per_master"
+    end
+
+    test "fish renders multi-word option names as kebab-case, matching the parser (issue #65)" do
+      script = Cheer.Completion.generate(CheerTest.TestUnderscoreOption, :fish, prog: "under")
+      assert script =~ "-l base-port"
+      assert script =~ "-l replicas-per-master"
+      refute script =~ "base_port"
+      refute script =~ "replicas_per_master"
+    end
+
     test "generates powershell completion (#23)" do
       script = Cheer.Completion.generate(TestRoot, :powershell, prog: "myapp")
       assert script =~ "Register-ArgumentCompleter -Native -CommandName 'myapp'"
