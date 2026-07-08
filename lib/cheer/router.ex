@@ -243,12 +243,18 @@ defmodule Cheer.Router do
       print_invalid_options_error(command, invalid, opts)
       :handled
     else
+      parsed_map = build_parsed_map(parsed, all_options)
       args = apply_defaults(all_options)
       args = apply_env_vars(args, all_options)
-      args = Map.merge(args, build_parsed_map(parsed, all_options))
+      args = Map.merge(args, parsed_map)
       args = Map.merge(args, num_args_values)
 
       {declared_positional, rest_args} = Enum.split(positional, length(meta.arguments))
+
+      supplied_positional =
+        meta.arguments
+        |> Enum.zip(declared_positional)
+        |> Enum.map(fn {{name, _opts}, _value} -> name end)
 
       args =
         meta.arguments
@@ -256,6 +262,13 @@ defmodule Cheer.Router do
         |> Enum.reduce(args, fn {{name, arg_opts}, value}, acc ->
           Map.put(acc, name, coerce_arg(value, arg_opts))
         end)
+
+      # Names the user actually supplied (parsed flags, num_args flags, and
+      # positionals present in argv). Constraint checks key off this rather than
+      # Map.has_key?/2 so that defaults, :count (0), and :multi ([]) do not read
+      # as "provided". Env fallback is intentionally not counted as user input.
+      provided =
+        MapSet.new(Map.keys(parsed_map) ++ Map.keys(num_args_values) ++ supplied_positional)
 
       args =
         case meta[:trailing_var_arg] do
@@ -287,9 +300,9 @@ defmodule Cheer.Router do
 
         true ->
           with :ok <- validate_num_args(num_args_values, all_options),
-               :ok <- validate_conditional_required(args, all_options),
-               :ok <- validate_constraints(args, all_options),
-               :ok <- validate_groups(args, Map.get(meta, :groups, %{})),
+               :ok <- validate_conditional_required(args, all_options, provided),
+               :ok <- validate_constraints(all_options, provided),
+               :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
                :ok <- validate_params(args, all_options),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
@@ -324,15 +337,18 @@ defmodule Cheer.Router do
       print_invalid_options_error(command, invalid, opts)
       :handled
     else
+      parsed_map = build_parsed_map(parsed, all_options)
       args = apply_defaults(all_options)
       args = apply_env_vars(args, all_options)
-      args = Map.merge(args, build_parsed_map(parsed, all_options))
+      args = Map.merge(args, parsed_map)
 
       args =
         case positional do
           [] -> Map.put(args, :external_subcommand, nil)
           [name | rest] -> Map.put(args, :external_subcommand, {name, rest})
         end
+
+      provided = MapSet.new(Map.keys(parsed_map))
 
       missing = missing_required_options(all_options, args)
 
@@ -342,9 +358,9 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with :ok <- validate_conditional_required(args, all_options),
-               :ok <- validate_constraints(args, all_options),
-               :ok <- validate_groups(args, Map.get(meta, :groups, %{})),
+          with :ok <- validate_conditional_required(args, all_options, provided),
+               :ok <- validate_constraints(all_options, provided),
+               :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
                :ok <- validate_params(args, all_options),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
@@ -379,20 +395,20 @@ defmodule Cheer.Router do
 
   # -- Conditional required (required_if / required_unless) --
 
-  defp validate_conditional_required(args, options) do
+  defp validate_conditional_required(args, options, provided) do
     Enum.reduce_while(options, :ok, fn {name, opts}, _acc ->
-      if Map.has_key?(args, name) do
+      if MapSet.member?(provided, name) do
         {:cont, :ok}
       else
-        check_conditional_required(name, opts, args)
+        check_conditional_required(name, opts, args, provided)
       end
     end)
   end
 
-  defp check_conditional_required(name, opts, args) do
+  defp check_conditional_required(name, opts, args, provided) do
     cond do
       Keyword.has_key?(opts, :required_if) ->
-        case match_required_if(Keyword.fetch!(opts, :required_if), args) do
+        case match_required_if(Keyword.fetch!(opts, :required_if), args, provided) do
           {:match, dep, val} ->
             {:halt,
              {:error, "--#{name} is required when --#{dep} is #{format_required_value(val)}"}}
@@ -404,7 +420,7 @@ defmodule Cheer.Router do
       Keyword.has_key?(opts, :required_unless) ->
         deps = Keyword.fetch!(opts, :required_unless)
 
-        if any_present?(deps, args) do
+        if any_present?(deps, provided) do
           {:cont, :ok}
         else
           {:halt, {:error, "--#{name} is required unless #{format_dep_list(deps)} is provided"}}
@@ -415,19 +431,23 @@ defmodule Cheer.Router do
     end
   end
 
-  defp match_required_if(checks, args) when is_list(checks) do
+  # Only deps the user actually supplied can trigger a required_if: a dependency
+  # left at its default value must not force the requirement.
+  defp match_required_if(checks, args, provided) when is_list(checks) do
     Enum.find_value(checks, :no_match, fn {dep, expected} ->
-      case Map.fetch(args, dep) do
-        {:ok, ^expected} -> {:match, dep, expected}
-        _ -> nil
+      if MapSet.member?(provided, dep) do
+        case Map.fetch(args, dep) do
+          {:ok, ^expected} -> {:match, dep, expected}
+          _ -> nil
+        end
       end
     end)
   end
 
-  defp any_present?(name, args) when is_atom(name), do: Map.has_key?(args, name)
+  defp any_present?(name, provided) when is_atom(name), do: MapSet.member?(provided, name)
 
-  defp any_present?(names, args) when is_list(names),
-    do: Enum.any?(names, &Map.has_key?(args, &1))
+  defp any_present?(names, provided) when is_list(names),
+    do: Enum.any?(names, &MapSet.member?(provided, &1))
 
   defp format_dep_list(name) when is_atom(name), do: "--#{name}"
 
@@ -439,38 +459,38 @@ defmodule Cheer.Router do
 
   # -- Per-option constraints (conflicts_with / requires) --
 
-  defp validate_constraints(args, options) do
+  defp validate_constraints(options, provided) do
     Enum.reduce_while(options, :ok, fn {name, opts}, _acc ->
-      if Map.has_key?(args, name) do
-        check_constraints(name, opts, args)
+      if MapSet.member?(provided, name) do
+        check_constraints(name, opts, provided)
       else
         {:cont, :ok}
       end
     end)
   end
 
-  defp check_constraints(name, opts, args) do
-    with :ok <- check_conflicts(name, opts, args),
-         :ok <- check_requires(name, opts, args) do
+  defp check_constraints(name, opts, provided) do
+    with :ok <- check_conflicts(name, opts, provided),
+         :ok <- check_requires(name, opts, provided) do
       {:cont, :ok}
     else
       err -> {:halt, err}
     end
   end
 
-  defp check_conflicts(name, opts, args) do
+  defp check_conflicts(name, opts, provided) do
     conflicts = list_of(Keyword.get(opts, :conflicts_with))
 
-    case Enum.find(conflicts, &Map.has_key?(args, &1)) do
+    case Enum.find(conflicts, &MapSet.member?(provided, &1)) do
       nil -> :ok
       other -> {:error, "--#{name} cannot be used with --#{other}"}
     end
   end
 
-  defp check_requires(name, opts, args) do
+  defp check_requires(name, opts, provided) do
     requires = list_of(Keyword.get(opts, :requires))
 
-    case Enum.find(requires, &(not Map.has_key?(args, &1))) do
+    case Enum.find(requires, &(not MapSet.member?(provided, &1))) do
       nil -> :ok
       other -> {:error, "--#{name} requires --#{other}"}
     end
@@ -482,11 +502,11 @@ defmodule Cheer.Router do
 
   # -- Groups validation --
 
-  defp validate_groups(_args, groups) when map_size(groups) == 0, do: :ok
+  defp validate_groups(_provided, groups) when map_size(groups) == 0, do: :ok
 
-  defp validate_groups(args, groups) do
+  defp validate_groups(provided, groups) do
     Enum.reduce_while(groups, :ok, fn {name, %{opts: opts, members: members}}, _acc ->
-      set_members = Enum.filter(members, &Map.has_key?(args, &1))
+      set_members = Enum.filter(members, &MapSet.member?(provided, &1))
 
       cond do
         Keyword.get(opts, :mutually_exclusive, false) and length(set_members) > 1 ->
