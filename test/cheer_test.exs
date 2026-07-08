@@ -1365,6 +1365,66 @@ defmodule CheerTest do
     end
   end
 
+  defmodule TestHiddenSub do
+    use Cheer.Command
+
+    command "debug" do
+      about("Internal diagnostics")
+      hide()
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: :debug_ran
+  end
+
+  defmodule TestVisibleSub do
+    use Cheer.Command
+
+    command "show" do
+      about("Visible command")
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: :show_ran
+  end
+
+  defmodule TestHiddenCmdRoot do
+    use Cheer.Command
+
+    command "app" do
+      about("Root with a hidden subcommand")
+      subcommand(TestHiddenSub)
+      subcommand(TestVisibleSub)
+    end
+  end
+
+  describe "hidden subcommands (#60)" do
+    test "hidden subcommand is absent from parent help but visible ones remain" do
+      output = capture_io(fn -> Cheer.run(TestHiddenCmdRoot, ["--help"]) end)
+      refute output =~ "debug"
+      assert output =~ "show"
+    end
+
+    test "hidden subcommand is still dispatchable" do
+      assert Cheer.run(TestHiddenCmdRoot, ["debug"]) == :debug_ran
+    end
+
+    test "hidden subcommand is excluded from Cheer.tree/1" do
+      names = Enum.map(Cheer.tree(TestHiddenCmdRoot).subcommands, & &1.name)
+      assert names == ["show"]
+    end
+
+    test "hidden subcommand is absent from the unknown-command listing" do
+      output = capture_io(fn -> Cheer.run(TestHiddenCmdRoot, ["nope"]) end)
+      assert output =~ "Available commands:"
+      refute output =~ "debug"
+    end
+
+    test "hide defaults to true when called without an argument" do
+      assert TestHiddenSub.__cheer_meta__().hide == true
+    end
+  end
+
   # -- Subcommand aliases (#12) ------------------------------------------------
 
   defmodule TestAliasedSub do

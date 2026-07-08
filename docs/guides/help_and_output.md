@@ -79,14 +79,25 @@ predictable.
 
 ## Hiding from help
 
+Hide an individual option or argument with `hide: true`:
+
 ```elixir
 option :internal, type: :boolean, hide: true
+argument :legacy, type: :string, hide: true
+```
+
+Hide a whole subcommand with the command-level `hide` setting:
+
+```elixir
 command "debug" do
+  about "Internal diagnostics"
   hide true
 end
 ```
 
-Still accepted by the parser; absent from help output.
+Hidden items are still accepted by the parser and a hidden subcommand is still
+dispatchable; they are only omitted from help output, shell completion, and the
+"Available commands" list shown on an unknown-command error.
 
 ## Flag naming
 

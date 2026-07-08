@@ -42,6 +42,18 @@ defmodule Cheer.Command.DSL do
   @doc "Override the auto-generated usage line in help output."
   defmacro usage(text), do: quote(do: @cheer_usage(unquote(text)))
 
+  @doc """
+  Hide this command from its parent's help, shell completion, and unknown-command
+  listings. The command stays fully dispatchable; only its visibility is affected.
+
+  Useful for internal, experimental, or legacy commands.
+
+      command "debug" do
+        hide true
+      end
+  """
+  defmacro hide(val \\ true), do: quote(do: @cheer_hide(unquote(val)))
+
   @doc "Require that a subcommand is provided (error instead of showing help)."
   defmacro subcommand_required(val), do: quote(do: @cheer_subcommand_required(unquote(val)))
 
