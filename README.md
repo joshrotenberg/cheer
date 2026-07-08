@@ -37,12 +37,14 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
 
 - Declarative macro DSL for commands, options, arguments, and subcommands
 - Typed options and arguments with automatic coercion
+- Repeated (`:multi`) and multi-value (`:num_args`) options
 - Per-param and cross-param validation, choices, conditional-required
 - Per-option relations (`:conflicts_with`, `:requires`) and param groups
 - Env var fallback, defaults, boolean negation (`--no-*`)
 - Auto-generated help with headings, display order, before/after text
 - Subcommand prefix inference and `"Did you mean?"` suggestions
-- External subcommands for git-style plugin dispatchers
+- Optional subcommands (`:args_conflicts_with_subcommands`) and external
+  subcommands for git-style plugin dispatchers
 - Shell completion for bash, zsh, fish, and PowerShell
 - REPL mode driven by the same command tree
 - In-process test runner with output capture
@@ -76,7 +78,8 @@ Full docs on [hexdocs.pm/cheer](https://hexdocs.pm/cheer):
   [Testing](https://hexdocs.pm/cheer/testing.html).
 - **Cookbook:**
   [Greeter](https://hexdocs.pm/cheer/greeter.html) (single command),
-  [Devtool](https://hexdocs.pm/cheer/devtool.html) (nested subcommands with hooks and groups).
+  [Devtool](https://hexdocs.pm/cheer/devtool.html) (nested subcommands with hooks and groups),
+  [Mix task](https://hexdocs.pm/cheer/mix_task.html) (drive a `mix` task with a command).
 
 ## Runnable examples
 
@@ -86,6 +89,8 @@ Standalone Mix projects that match the cookbook entries live under
 - [`examples/greeter/`](examples/greeter/) -- minimal single-command CLI.
 - [`examples/devtool/`](examples/devtool/) -- nested multi-command CLI
   with lifecycle hooks and groups.
+- [`examples/mix_task/`](examples/mix_task/) -- a Cheer command driving a
+  `mix` task.
 
 ```sh
 cd examples/greeter && mix deps.get

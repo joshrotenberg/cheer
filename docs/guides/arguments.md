@@ -75,6 +75,17 @@ argument :port, type: :integer,
 
 See [Validation](validation.md) for more.
 
+## Extended help (`:long_help`)
+
+Like options, an argument can carry a longer description shown by `--help` (the
+long form) while `:help` is used in the short `-h` output:
+
+```elixir
+argument :path, type: :string,
+  help: "File to process",
+  long_help: "Path to the input file. Relative paths resolve against the current directory."
+```
+
 ## Hidden arguments
 
 ```elixir
