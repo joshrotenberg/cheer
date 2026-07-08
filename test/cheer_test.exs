@@ -3075,4 +3075,57 @@ defmodule CheerTest do
       assert {:ok, %{def: ["x", "y"]}} = Cheer.run(TestDelimiter, [])
     end
   end
+
+  # -- Custom value parsers (:parse) (#72) -------------------------------------
+
+  defmodule TestParse do
+    use Cheer.Command
+
+    command "pr" do
+      option(:mode,
+        type: :string,
+        parse: fn
+          "r" -> {:ok, :read}
+          "w" -> {:ok, :write}
+          _ -> {:error, "must be r or w"}
+        end
+      )
+
+      option(:port, type: :integer, parse: fn n -> {:ok, n * 2} end)
+
+      option(:tags,
+        type: :string,
+        value_delimiter: ",",
+        parse: fn s -> {:ok, String.upcase(s)} end
+      )
+
+      argument(:name, type: :string, required: false, parse: fn s -> {:ok, String.to_atom(s)} end)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "custom value parsers (:parse) (#72)" do
+    test "transforms an option value into a domain value" do
+      assert {:ok, %{mode: :read}} = Cheer.run(TestParse, ["--mode", "r"])
+    end
+
+    test "an :error result is a usage failure with the flag name and message" do
+      output = capture_io(fn -> Cheer.run(TestParse, ["--mode", "x"]) end)
+      assert output =~ "--mode: must be r or w"
+    end
+
+    test "runs after built-in type coercion" do
+      assert {:ok, %{port: 20}} = Cheer.run(TestParse, ["--port", "10"])
+    end
+
+    test "is applied element-wise to a delimited list" do
+      assert {:ok, %{tags: ["A", "B"]}} = Cheer.run(TestParse, ["--tags", "a,b"])
+    end
+
+    test "transforms an argument value" do
+      assert {:ok, %{name: :foo}} = Cheer.run(TestParse, ["foo"])
+    end
+  end
 end

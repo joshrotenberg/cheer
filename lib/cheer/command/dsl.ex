@@ -165,22 +165,37 @@ defmodule Cheer.Command.DSL do
     * `:hide` - `true` to hide from help output
     * `:display_order` - integer controlling position in help (lower first)
     * `:validate` - `fn value -> :ok | {:error, msg} end`
+    * `:parse` - `fn value -> {:ok, parsed} | {:error, msg} end` to transform the
+      value into a domain type (runs after coercion, before `:validate`)
   """
   defmacro argument(name, opts \\ []) do
-    {validate_ast, clean_opts} = Keyword.pop(opts, :validate)
+    {validate_ast, opts} = Keyword.pop(opts, :validate)
+    {parse_ast, clean_opts} = Keyword.pop(opts, :parse)
 
-    if validate_ast do
-      fname = :"__cheer_validate_#{name}__"
+    quote do
+      @cheer_arguments {unquote(name), unquote(clean_opts)}
+      unquote(accessor_fn(:validate, name, validate_ast))
+      unquote(accessor_fn(:parse, name, parse_ast))
+    end
+  end
 
-      quote do
-        @cheer_arguments {unquote(name), unquote(clean_opts)}
-        @cheer_has_validate unquote(name)
-        def unquote(fname)(val), do: unquote(validate_ast).(val)
-      end
-    else
-      quote do
-        @cheer_arguments {unquote(name), unquote(clean_opts)}
-      end
+  # Anonymous functions in DSL opts (:validate, :parse) cannot be Macro.escape'd
+  # into module attributes, so generate a named accessor and record the name; the
+  # compiler reattaches the fn into the param opts. Returns nil (a no-op in the
+  # surrounding quote block) when the option was not given.
+  defp accessor_fn(_kind, _name, nil), do: nil
+
+  defp accessor_fn(:validate, name, ast) do
+    quote do
+      @cheer_has_validate unquote(name)
+      def unquote(:"__cheer_validate_#{name}__")(val), do: unquote(ast).(val)
+    end
+  end
+
+  defp accessor_fn(:parse, name, ast) do
+    quote do
+      @cheer_has_parse unquote(name)
+      def unquote(:"__cheer_parse_#{name}__")(val), do: unquote(ast).(val)
     end
   end
 
@@ -206,6 +221,11 @@ defmodule Cheer.Command.DSL do
       `value_delimiter: ","` makes `--tags a,b,c` yield `["a", "b", "c"]`. Each
       element is coerced to `:type` and checked against `:choices`. Combines with
       `:multi` (each occurrence is split and the results flattened).
+    * `:parse` - `fn value -> {:ok, parsed} | {:error, msg} end` to transform the
+      value into a domain type (an atom, a `Date`, a struct). Runs after `:type`
+      coercion and `:value_delimiter` splitting, before `:choices` and `:validate`.
+      For a list value (`:multi`, `:num_args`, `:value_delimiter`) it is applied to
+      each element.
     * `:env` - environment variable name to read as fallback
     * `:choices` - list of allowed values
     * `:help` - help text shown in `--help`
@@ -229,25 +249,13 @@ defmodule Cheer.Command.DSL do
   Extra positional arguments after `--` are collected into `args[:rest]`.
   """
   defmacro option(name, opts \\ []) do
-    {validate_ast, clean_opts} = Keyword.pop(opts, :validate)
-
-    base =
-      if validate_ast do
-        fname = :"__cheer_validate_#{name}__"
-
-        quote do
-          @cheer_options {unquote(name), unquote(clean_opts)}
-          @cheer_has_validate unquote(name)
-          def unquote(fname)(val), do: unquote(validate_ast).(val)
-        end
-      else
-        quote do
-          @cheer_options {unquote(name), unquote(clean_opts)}
-        end
-      end
+    {validate_ast, opts} = Keyword.pop(opts, :validate)
+    {parse_ast, clean_opts} = Keyword.pop(opts, :parse)
 
     quote do
-      unquote(base)
+      @cheer_options {unquote(name), unquote(clean_opts)}
+      unquote(accessor_fn(:validate, name, validate_ast))
+      unquote(accessor_fn(:parse, name, parse_ast))
 
       # If inside a group block, register this option in the group
       if @cheer_current_group do
