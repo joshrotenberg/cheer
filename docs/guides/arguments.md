@@ -83,6 +83,23 @@ argument :internal, type: :string, hide: true
 
 Accepted by the parser; omitted from help output.
 
+## Short vs long help
+
+Arguments can define both `:help` and `:long_help`. Short help (`-h`) uses
+`:help`; long help (`--help`) prefers `:long_help` when it is set.
+
+```elixir
+argument :path,
+  type: :string,
+  required: true,
+  value_name: "PATH",
+  help: "Input path",
+  long_help: "Input file or directory to process. Relative paths are resolved from the current working directory."
+```
+
+Use this when the concise description is enough for normal help, but the long
+form should explain defaults, accepted formats, or important side effects.
+
 ## See also
 
 - [Options](options.md) -- non-positional flags.

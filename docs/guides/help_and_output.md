@@ -9,7 +9,8 @@ Every command gets two help forms:
 
 - `-h` prints short help, built from `about` and `help` fields.
 - `--help` prints long help, preferring `long_about` over `about` and
-  `long_help` over `help` where those are set.
+  `long_help` over `help` where those are set. `long_help` is supported by
+  both options and positional arguments.
 
 ```elixir
 command "deploy" do
@@ -23,6 +24,10 @@ end
 option :env, type: :string,
   help: "Target environment",
   long_help: "Target environment (one of: dev, staging, prod)"
+
+argument :target, type: :string,
+  help: "Deployment target",
+  long_help: "Deployment target name, such as a service, cluster, or host group."
 ```
 
 ## Before and after help

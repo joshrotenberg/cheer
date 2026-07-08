@@ -20,10 +20,21 @@ my-app> help
 my-app> exit
 ```
 
+Pass `:banner` to replace the default startup text:
+
+```elixir
+Cheer.Repl.start(MyApp.CLI.Root,
+  prog: "my-app",
+  banner: "MyApp admin shell\nType help, commands, or exit."
+)
+```
+
 ## Built-in commands
 
 - `help` / `?` -- print help for the root command (or a sub, with
   `help <sub>`).
+- `commands` -- print the command tree so you can inspect available
+  subcommands without leaving the REPL.
 - `exit` / `quit` / `Ctrl+D` -- leave the REPL.
 
 ## Tokenization
