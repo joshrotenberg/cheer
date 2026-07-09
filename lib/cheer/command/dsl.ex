@@ -223,6 +223,9 @@ defmodule Cheer.Command.DSL do
     * `:short` - single-character alias atom (e.g. `:p` for `-p`)
     * `:required` - `true` or `false` (default)
     * `:default` - default value when not provided (`:count` defaults to `0`, `:multi` defaults to `[]`)
+    * `:default_missing_value` - value used when the flag is present with no value
+      (`--color` alone). Distinct from `:default` (flag absent). An explicit value
+      must use the `--flag=value` form; `--flag value` leaves `value` as a positional.
     * `:multi` - `true` to allow repeated flags collected into a list (e.g. `--tag a --tag b`)
     * `:num_args` - collect several values from a single flag invocation into a list:
       an integer for an exact count (`num_args: 2` accepts `--point 1 2`) or a range

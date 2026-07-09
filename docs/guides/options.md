@@ -108,6 +108,22 @@ Each element is coerced to the option's `:type` and validated against
 `:multi` (each occurrence is split and the results flattened). This differs
 from `:num_args`, which reads several separate tokens after one flag.
 
+## Optional value (`:default_missing_value`)
+
+`:default_missing_value` is the value a flag takes when it is present with no
+value, distinct from `:default` (the flag absent):
+
+```elixir
+option :color, type: :string, default: "auto", default_missing_value: "always"
+# (absent)      ->  args[:color] == "auto"
+# --color       ->  args[:color] == "always"
+# --color=never ->  args[:color] == "never"
+```
+
+An explicit value must use the `--flag=value` form. `--color never` leaves
+`never` as a positional argument, so `--color` still resolves to the missing
+value.
+
 ## Custom value parsers (`:parse`)
 
 `:parse` transforms a value into a domain type (an atom, a `Date`, a struct)

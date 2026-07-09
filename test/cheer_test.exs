@@ -3538,4 +3538,43 @@ defmodule CheerTest do
       assert output =~ "<extra> expects between 1 and 2 values, got 0"
     end
   end
+
+  # -- default_missing_value (#103) --------------------------------------------
+
+  defmodule TestDefaultMissing do
+    use Cheer.Command
+
+    command "dm" do
+      option(:color, type: :string, default: "auto", default_missing_value: "always")
+      option(:level, type: :integer, default: 0, default_missing_value: 3)
+      argument(:file, type: :string, required: false)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "default_missing_value (#103)" do
+    test "an absent flag uses :default" do
+      assert {:ok, %{color: "auto"}} = Cheer.run(TestDefaultMissing, [])
+    end
+
+    test "a bare flag uses the missing value" do
+      assert {:ok, %{color: "always"}} = Cheer.run(TestDefaultMissing, ["--color"])
+    end
+
+    test "an explicit --flag=value overrides both" do
+      assert {:ok, %{color: "never"}} = Cheer.run(TestDefaultMissing, ["--color=never"])
+    end
+
+    test "a space-separated token stays a positional, not the value" do
+      assert {:ok, %{color: "always", file: "myfile"}} =
+               Cheer.run(TestDefaultMissing, ["--color", "myfile"])
+    end
+
+    test "the missing value and an inline value are typed" do
+      assert {:ok, %{level: 3}} = Cheer.run(TestDefaultMissing, ["--level"])
+      assert {:ok, %{level: 7}} = Cheer.run(TestDefaultMissing, ["--level=7"])
+    end
+  end
 end
