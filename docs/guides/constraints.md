@@ -24,6 +24,13 @@ Multiple conditions: any match triggers the requirement.
 option :region, type: :string, required_if: [env: "prod", env: "staging"]
 ```
 
+Use `:required_if_all` when every condition must hold instead of any:
+
+```elixir
+option :confirm, type: :boolean, required_if_all: [env: "prod", force: true]
+# error: --confirm is required when --env is 'prod' and --force is true
+```
+
 ### `:required_unless`
 
 Required unless any of the named options is present. Accepts an atom or a
@@ -36,6 +43,14 @@ option :config, type: :string, required_unless: [:inline, :stdin]
 
 ```
 error: --config is required unless --inline, --stdin is provided
+```
+
+Use `:required_unless_all` to require the option unless *all* of the named
+options are present:
+
+```elixir
+option :out, type: :string, required_unless_all: [:a, :b]
+# error: --out is required unless --a, --b are all provided
 ```
 
 ## Per-option relations
