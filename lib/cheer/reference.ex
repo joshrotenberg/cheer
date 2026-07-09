@@ -49,12 +49,10 @@ defmodule Cheer.Reference do
     opts = if tree.options == [], do: "", else: " [OPTIONS]"
 
     args =
-      tree.arguments
-      |> Enum.map(fn {name, o} ->
+      Enum.map_join(tree.arguments, fn {name, o} ->
         label = "<#{value_name(name, o)}>"
         if Keyword.get(o, :required, false), do: " #{label}", else: " [#{label}]"
       end)
-      |> Enum.join()
 
     trailing =
       case tree.trailing_var_arg do
@@ -92,9 +90,9 @@ defmodule Cheer.Reference do
   defp subcommands_section(%{subcommands: []}, _path, _level), do: ""
 
   defp subcommands_section(tree, path, level) do
-    tree.subcommands
-    |> Enum.map(fn sub -> render_command(sub, "#{path} #{sub.name}", level + 1) end)
-    |> Enum.join("\n\n")
+    Enum.map_join(tree.subcommands, "\n\n", fn sub ->
+      render_command(sub, "#{path} #{sub.name}", level + 1)
+    end)
   end
 
   # -- Options / arguments --
