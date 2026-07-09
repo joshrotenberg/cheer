@@ -3421,6 +3421,13 @@ defmodule CheerTest do
       option(:legacy, type: :string, deprecated: true, help: "old flag")
       option(:soon, type: :string, deprecated: "use --now", help: "phasing out")
       option(:current, type: :string, help: "fine")
+
+      argument(:oldpath,
+        type: :string,
+        required: false,
+        deprecated: "use --file",
+        help: "old arg"
+      )
     end
 
     @impl Cheer.Command
@@ -3469,6 +3476,16 @@ defmodule CheerTest do
         capture_io(:stderr, fn -> assert Cheer.run(TestDeprecatedRoot, ["old"]) == :ran end)
 
       assert warnings =~ "warning: command 'old' is deprecated: use `new` instead"
+    end
+
+    test "help shows a (deprecated) marker on an argument" do
+      output = capture_io(fn -> Cheer.run(TestDeprecatedLeaf, ["--help"]) end)
+      assert output =~ "old arg (deprecated: use --file)"
+    end
+
+    test "using a deprecated argument warns to stderr but still runs" do
+      warnings = capture_io(:stderr, fn -> Cheer.run(TestDeprecatedLeaf, ["somepath"]) end)
+      assert warnings =~ "warning: <oldpath> is deprecated: use --file"
     end
   end
 
@@ -3632,6 +3649,7 @@ defmodule CheerTest do
       about("Deploy the app")
       argument(:env, type: :string, required: true, help: "Environment")
       option(:force, type: :boolean, short: :f, help: "Skip confirmation")
+      option(:legacy, type: :string, deprecated: true, help: "old flag")
     end
 
     @impl Cheer.Command
@@ -3694,6 +3712,10 @@ defmodule CheerTest do
     test "omits hidden options and subcommands", %{md: md} do
       refute md =~ "internal"
       refute md =~ "secret"
+    end
+
+    test "marks deprecated options", %{md: md} do
+      assert md =~ "- `--legacy` `<legacy>` -- old flag (deprecated)"
     end
   end
 end
