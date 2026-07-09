@@ -61,7 +61,12 @@ defmodule Cheer.Help do
         sub_meta = sub.__cheer_meta__()
         cmd_aliases = Map.get(sub_meta, :aliases, [])
         alias_str = if cmd_aliases != [], do: " (#{Enum.join(cmd_aliases, ", ")})", else: ""
-        IO.puts("  #{String.pad_trailing(sub_meta.name <> alias_str, 20)} #{sub_meta.about}")
+        dep = Enum.join(deprecated_label(Map.get(sub_meta, :deprecated)), "")
+        dep = if dep != "", do: " " <> dep, else: ""
+
+        IO.puts(
+          "  #{String.pad_trailing(sub_meta.name <> alias_str, 20)} #{sub_meta.about}#{dep}"
+        )
       end
 
       IO.puts("")
@@ -83,7 +88,12 @@ defmodule Cheer.Help do
         display_name = Keyword.get(arg_opts, :value_name, Atom.to_string(name))
         help = pick_help(arg_opts, long)
         required = if Keyword.get(arg_opts, :required, false), do: " (required)", else: ""
-        IO.puts("  #{String.pad_trailing("<#{display_name}>", 20)} #{help}#{required}")
+        deprecated = Enum.join(deprecated_label(Keyword.get(arg_opts, :deprecated)), "")
+        deprecated = if deprecated != "", do: " " <> deprecated, else: ""
+
+        IO.puts(
+          "  #{String.pad_trailing("<#{display_name}>", 20)} #{help}#{required}#{deprecated}"
+        )
       end
 
       if has_trailing do
@@ -172,6 +182,12 @@ defmodule Cheer.Help do
 
   defp maybe_append(list, nil, _fun), do: list
   defp maybe_append(list, value, fun), do: list ++ [fun.(value)]
+
+  # `:deprecated` is `true` for a bare marker or a string for a reason.
+  defp deprecated_label(nil), do: []
+  defp deprecated_label(false), do: []
+  defp deprecated_label(true), do: ["(deprecated)"]
+  defp deprecated_label(msg) when is_binary(msg), do: ["(deprecated: #{msg})"]
 
   # Render a default for the "[default: ...]" suffix. Most defaults are strings
   # or numbers; a value with no String.Chars implementation (a map) or a
@@ -284,6 +300,8 @@ defmodule Cheer.Help do
         nil -> suffixes
         spec -> suffixes ++ [num_args_label(spec)]
       end
+
+    suffixes = suffixes ++ deprecated_label(Keyword.get(opt_opts, :deprecated))
 
     suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
 

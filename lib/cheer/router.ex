@@ -131,8 +131,9 @@ defmodule Cheer.Router do
 
     case match_subcommand(meta.subcommands, argv, infer?) do
       {:ok, sub_module, rest} ->
-        sub_name = sub_module.__cheer_meta__().name
-        child_opts = Keyword.update!(opts, :prog, &"#{&1} #{sub_name}")
+        sub_meta = sub_module.__cheer_meta__()
+        warn_deprecated_command(sub_meta)
+        child_opts = Keyword.update!(opts, :prog, &"#{&1} #{sub_meta.name}")
         dispatch_with_hooks(sub_module, rest, child_opts, hooks)
 
       {:ambiguous, token, candidates} ->
@@ -318,6 +319,7 @@ defmodule Cheer.Router do
                # Include arguments so argument-level :validate and :choices run.
                :ok <- validate_params(args, all_options ++ meta.arguments, arg_names),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
+            warn_deprecated_options(all_options, provided)
             {:ok, args}
           else
             {:error, msg} ->
@@ -397,6 +399,7 @@ defmodule Cheer.Router do
                # Include arguments so argument-level :validate and :choices run.
                :ok <- validate_params(args, all_options ++ meta.arguments, arg_names),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
+            warn_deprecated_options(all_options, provided)
             {:ok, args}
           else
             {:error, msg} ->
@@ -1171,6 +1174,37 @@ defmodule Cheer.Router do
     |> Enum.take_while(&(&1 != "--"))
     |> Enum.any?(&(&1 in targets))
   end
+
+  # -- Deprecation warnings --
+
+  defp warn_deprecated_options(options, provided) do
+    for {name, opts} <- options, MapSet.member?(provided, name) do
+      case Keyword.get(opts, :deprecated) do
+        dep when dep not in [nil, false] ->
+          IO.puts(:stderr, deprecation_message("--#{flag_string(name)}", dep))
+
+        _ ->
+          :ok
+      end
+    end
+
+    :ok
+  end
+
+  defp warn_deprecated_command(meta) do
+    case Map.get(meta, :deprecated, false) do
+      dep when dep not in [nil, false] ->
+        IO.puts(:stderr, deprecation_message("command '#{meta.name}'", dep))
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp deprecation_message(label, true), do: "warning: #{label} is deprecated"
+
+  defp deprecation_message(label, msg) when is_binary(msg),
+    do: "warning: #{label} is deprecated: #{msg}"
 
   # -- Output helpers --
 

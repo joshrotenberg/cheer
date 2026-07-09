@@ -116,6 +116,29 @@ option given a bad value is not treated as a typo, so it never suggests the flag
 you already typed. Subcommand suggestions work the same way on an unknown
 command.
 
+## Deprecation
+
+Mark an option, argument, or subcommand deprecated with `:deprecated` (options
+and arguments) or the `deprecated` command setting (subcommands). Pass `true`
+for a bare marker or a string for a reason:
+
+```elixir
+option :old_flag, type: :string, deprecated: "use --new-flag"
+
+command "old-name" do
+  deprecated "use `new-name` instead"
+end
+```
+
+Deprecated items still work. Help shows a `(deprecated)` marker (with the reason,
+if given), and using a deprecated option or subcommand prints a warning to
+stderr:
+
+```
+warning: --old-flag is deprecated: use --new-flag
+warning: command 'old-name' is deprecated: use `new-name` instead
+```
+
 ## Flag naming
 
 Cheer converts atom option names to kebab-case in both the parser and help

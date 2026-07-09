@@ -14,6 +14,7 @@ defmodule Cheer.Command.Compiler do
     aliases = Module.get_attribute(env.module, :cheer_aliases) || []
     usage = Module.get_attribute(env.module, :cheer_usage)
     hide = Module.get_attribute(env.module, :cheer_hide) || false
+    deprecated = Module.get_attribute(env.module, :cheer_deprecated) || false
     subcommand_required = Module.get_attribute(env.module, :cheer_subcommand_required) || false
     propagate_version = Module.get_attribute(env.module, :cheer_propagate_version) || false
     infer_subcommands = Module.get_attribute(env.module, :cheer_infer_subcommands) || false
@@ -93,6 +94,7 @@ defmodule Cheer.Command.Compiler do
           aliases: unquote(aliases),
           usage: unquote(usage),
           hide: unquote(hide),
+          deprecated: unquote(deprecated),
           subcommand_required: unquote(subcommand_required),
           propagate_version: unquote(propagate_version),
           infer_subcommands: unquote(infer_subcommands),
