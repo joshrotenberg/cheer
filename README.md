@@ -53,7 +53,8 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
 - Shell completion for bash, zsh, fish, and PowerShell
 - REPL mode driven by the same command tree
 - In-process test runner with output capture
-- Command tree introspection (`Cheer.tree/1`) for docs and scripts
+- Command tree introspection (`Cheer.tree/1`) and markdown reference generation
+  (`Cheer.Reference`)
 - Zero runtime dependencies
 
 ## Install
