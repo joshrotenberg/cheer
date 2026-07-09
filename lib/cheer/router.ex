@@ -233,10 +233,12 @@ defmodule Cheer.Router do
     # (and their value tokens) out of argv up front, then parse the remainder.
     {num_args_values, argv} = extract_num_args(argv, all_options)
     {hyphen_values, argv} = extract_hyphen_values(argv, all_options)
+    {missing_values, argv} = extract_default_missing(argv, all_options)
 
     parser_options =
       Enum.reject(all_options, fn {_name, o} = opt ->
-        Keyword.has_key?(o, :num_args) or single_value_hyphen_opt?(opt)
+        Keyword.has_key?(o, :num_args) or single_value_hyphen_opt?(opt) or
+          default_missing_opt?(opt)
       end)
 
     {option_parser_opts, option_aliases} = build_option_parser_spec(parser_options)
@@ -254,6 +256,7 @@ defmodule Cheer.Router do
       args = Map.merge(args, parsed_map)
       args = Map.merge(args, num_args_values)
       args = Map.merge(args, hyphen_values)
+      args = Map.merge(args, missing_values)
       args = apply_value_delimiters(args, all_options)
 
       {positional_map, rest_args, supplied_positional} =
@@ -268,7 +271,8 @@ defmodule Cheer.Router do
       provided =
         MapSet.new(
           Map.keys(parsed_map) ++
-            Map.keys(num_args_values) ++ Map.keys(hyphen_values) ++ supplied_positional
+            Map.keys(num_args_values) ++
+            Map.keys(hyphen_values) ++ Map.keys(missing_values) ++ supplied_positional
         )
 
       args =
@@ -975,6 +979,47 @@ defmodule Cheer.Router do
     Keyword.get(o, :allow_hyphen_values, false) and
       not Keyword.has_key?(o, :num_args) and
       Keyword.get(o, :type, :string) not in [:boolean, :count]
+  end
+
+  # Options with `default_missing_value` take a value only via the `--flag=value`
+  # form; a bare `--flag` yields the missing value and never consumes a following
+  # token (which OptionParser would otherwise treat as the value). Resolve them in
+  # a pre-pass, like the num_args/hyphen extractions.
+  defp extract_default_missing(argv, options) do
+    dmv_opts = Enum.filter(options, &default_missing_opt?/1)
+
+    if dmv_opts == [] do
+      {%{}, argv}
+    else
+      do_extract_default_missing(argv, num_args_lookup(dmv_opts), %{}, [])
+    end
+  end
+
+  defp default_missing_opt?({_name, o}) do
+    Keyword.has_key?(o, :default_missing_value) and
+      not Keyword.has_key?(o, :num_args) and
+      Keyword.get(o, :type, :string) not in [:boolean, :count]
+  end
+
+  defp do_extract_default_missing([], _lookup, collected, residual),
+    do: {collected, Enum.reverse(residual)}
+
+  defp do_extract_default_missing(["--" | rest], _lookup, collected, residual),
+    do: {collected, Enum.reverse(residual) ++ ["--" | rest]}
+
+  defp do_extract_default_missing([token | rest], lookup, collected, residual) do
+    case num_args_flag(token, lookup) do
+      {{name, opts}, nil} ->
+        value = Keyword.fetch!(opts, :default_missing_value)
+        do_extract_default_missing(rest, lookup, Map.put(collected, name, value), residual)
+
+      {{name, opts}, inline} ->
+        value = coerce_arg(inline, opts)
+        do_extract_default_missing(rest, lookup, Map.put(collected, name, value), residual)
+
+      :nomatch ->
+        do_extract_default_missing(rest, lookup, collected, [token | residual])
+    end
   end
 
   defp do_extract_hyphen_values([], _lookup, collected, residual, _head?),
