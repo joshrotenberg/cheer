@@ -63,7 +63,7 @@ GREETER_GREETING=Hey mix run -e 'Greeter.CLI.main(["Ada"])'
 # Hey, Ada!
 
 mix run -e 'Greeter.CLI.main(["world", "--times", "42"])'
-# error: --times must be one of: ... (validator failure)
+# error: times must be 1-10 (validator failure)
 
 mix run -e 'Greeter.CLI.main(["--help"])'
 # Usage: greeter <name> [OPTIONS]
