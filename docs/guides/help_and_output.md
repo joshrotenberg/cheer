@@ -99,6 +99,23 @@ Hidden items are still accepted by the parser and a hidden subcommand is still
 dispatchable; they are only omitted from help output, shell completion, and the
 "Available commands" list shown on an unknown-command error.
 
+## Did you mean?
+
+On an unknown command or an unknown flag, Cheer suggests the closest declared
+name (by Jaro distance) if one is near enough:
+
+```
+$ myapp --colr red
+error: unknown option(s): --colr
+
+  Did you mean '--color'?
+```
+
+Flag suggestions match against declared option names and their aliases. A known
+option given a bad value is not treated as a typo, so it never suggests the flag
+you already typed. Subcommand suggestions work the same way on an unknown
+command.
+
 ## Flag naming
 
 Cheer converts atom option names to kebab-case in both the parser and help

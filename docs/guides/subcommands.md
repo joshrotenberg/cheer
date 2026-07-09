@@ -122,6 +122,9 @@ Behavior:
   flags the parent does not know about.
 - `args[:external_subcommand]` is `nil` when no external sub was invoked,
   `{name, rest}` when one was. Pattern matches are total.
+- The parent's own options parse before the external subcommand name, including
+  `:num_args` options: `my-tool --point 1 2 status` gives the parent
+  `point: [1, 2]` and the external sub `{"status", []}`.
 
 ## Optional subcommand (run the parent on an unknown token)
 

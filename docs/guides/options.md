@@ -108,6 +108,20 @@ Each element is coerced to the option's `:type` and validated against
 `:multi` (each occurrence is split and the results flattened). This differs
 from `:num_args`, which reads several separate tokens after one flag.
 
+## Custom value parsers (`:parse`)
+
+`:parse` transforms a value into a domain type (an atom, a `Date`, a struct)
+after `:type` coercion. See [Validation](validation.md) for the full contract:
+
+```elixir
+option :mode, type: :string, parse: fn
+  "r" -> {:ok, :read}
+  "w" -> {:ok, :write}
+  _ -> {:error, "must be r or w"}
+end
+# --mode r  ->  args[:mode] == :read
+```
+
 ## Aliases (long-form)
 
 ```elixir
