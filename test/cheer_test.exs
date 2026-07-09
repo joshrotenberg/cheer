@@ -2698,14 +2698,23 @@ defmodule CheerTest do
     end
   end
 
-  defmodule TestConditionalAll do
+  defmodule TestRequiredUnlessAll do
     use Cheer.Command
 
-    command "ca" do
+    command "rua" do
       option(:a, type: :boolean)
       option(:b, type: :boolean)
       option(:out, type: :string, required_unless_all: [:a, :b])
+    end
 
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestRequiredIfAll do
+    use Cheer.Command
+
+    command "ria" do
       option(:env, type: :string)
       option(:force, type: :boolean)
       option(:confirm, type: :boolean, required_if_all: [env: "prod", force: true])
@@ -2717,21 +2726,21 @@ defmodule CheerTest do
 
   describe "required_unless_all and required_if_all (#107)" do
     test "required_unless_all errors unless every dependency is present" do
-      out = capture_io(fn -> Cheer.run(TestConditionalAll, ["--a"]) end)
+      out = capture_io(fn -> Cheer.run(TestRequiredUnlessAll, ["--a"]) end)
       assert out =~ "--out is required unless --a, --b are all provided"
     end
 
     test "required_unless_all is satisfied when all dependencies are present" do
-      assert {:ok, _} = Cheer.run(TestConditionalAll, ["--a", "--b"])
+      assert {:ok, _} = Cheer.run(TestRequiredUnlessAll, ["--a", "--b"])
     end
 
     test "required_if_all fires only when every condition matches" do
-      out = capture_io(fn -> Cheer.run(TestConditionalAll, ["--env", "prod", "--force"]) end)
+      out = capture_io(fn -> Cheer.run(TestRequiredIfAll, ["--env", "prod", "--force"]) end)
       assert out =~ "--confirm is required when --env is 'prod' and --force is true"
     end
 
     test "required_if_all does not fire when only some conditions match" do
-      assert {:ok, _} = Cheer.run(TestConditionalAll, ["--env", "prod"])
+      assert {:ok, _} = Cheer.run(TestRequiredIfAll, ["--env", "prod"])
     end
   end
 
