@@ -3245,4 +3245,72 @@ defmodule CheerTest do
       assert output =~ "argh"
     end
   end
+
+  # -- Release-audit coverage gaps (#113) --------------------------------------
+
+  describe "Cheer.exit_code/1 (main exit-code mapping)" do
+    test "maps a usage failure to 2 and anything else to 0" do
+      assert Cheer.exit_code({:error, :usage}) == 2
+      assert Cheer.exit_code(:ok) == 0
+      assert Cheer.exit_code({:ok, %{}}) == 0
+      assert Cheer.exit_code("some run/2 result") == 0
+    end
+  end
+
+  describe "env :count coercion edge cases (#113)" do
+    test "a non-numeric env value floors to 0" do
+      System.put_env("TEST_CHEER_LEVEL", "notanint")
+      assert {:ok, %{level: 0}} = Cheer.run(TestCountEnv, [])
+    after
+      System.delete_env("TEST_CHEER_LEVEL")
+    end
+
+    test "a float-string env value floors to 0 (no partial parse)" do
+      System.put_env("TEST_CHEER_LEVEL", "3.9")
+      assert {:ok, %{level: 0}} = Cheer.run(TestCountEnv, [])
+    after
+      System.delete_env("TEST_CHEER_LEVEL")
+    end
+  end
+
+  defmodule TestParseInteractions do
+    use Cheer.Command
+
+    command "pi" do
+      option(:m,
+        type: :string,
+        parse: fn s -> {:ok, String.upcase(s)} end,
+        choices: ["READ", "WRITE"]
+      )
+
+      option(:n, type: :integer, multi: true, parse: fn i -> {:ok, i * 10} end)
+
+      option(:ids,
+        type: :string,
+        value_delimiter: ",",
+        parse: fn s -> if s == "bad", do: {:error, "no bad"}, else: {:ok, s} end
+      )
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe ":parse interactions (#113)" do
+    test ":choices validates the post-parse value" do
+      assert {:ok, %{m: "READ"}} = Cheer.run(TestParseInteractions, ["--m", "read"])
+
+      output = capture_io(fn -> Cheer.run(TestParseInteractions, ["--m", "nope"]) end)
+      assert output =~ "must be one of"
+    end
+
+    test ":parse applies element-wise to a :multi value" do
+      assert {:ok, %{n: [10, 20]}} = Cheer.run(TestParseInteractions, ["--n", "1", "--n", "2"])
+    end
+
+    test ":parse halts on the first failing element of a list" do
+      output = capture_io(fn -> Cheer.run(TestParseInteractions, ["--ids", "ok,bad,also"]) end)
+      assert output =~ "--ids: no bad"
+    end
+  end
 end

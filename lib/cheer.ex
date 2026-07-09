@@ -76,11 +76,18 @@ defmodule Cheer do
   @dialyzer {:nowarn_function, [main: 2, main: 3]}
   @spec main(module(), [String.t()], keyword()) :: no_return()
   def main(root_command, argv, opts \\ []) do
-    case run(root_command, argv, opts) do
-      {:error, :usage} -> System.halt(2)
-      _ -> System.halt(0)
-    end
+    root_command
+    |> run(argv, opts)
+    |> exit_code()
+    |> System.halt()
   end
+
+  @doc false
+  # Maps a `run/3` result to a conventional process exit code: 2 on a usage
+  # failure, 0 otherwise. Pure and testable, unlike `main/3` which halts.
+  @spec exit_code(term()) :: 0 | 2
+  def exit_code({:error, :usage}), do: 2
+  def exit_code(_), do: 0
 
   @doc """
   Returns the command tree as a nested data structure.
