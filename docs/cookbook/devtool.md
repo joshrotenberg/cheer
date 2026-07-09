@@ -100,7 +100,7 @@ end
 Passing both `--http --https` produces a friendly error from the group
 constraint.
 
-## A leaf with before/after hooks: `db migrate`
+## A leaf with hooks, a parser, and a deprecated flag: `db migrate`
 
 ```elixir
 defmodule Devtool.Db.Migrate do
@@ -111,6 +111,20 @@ defmodule Devtool.Db.Migrate do
 
     option :target,  type: :string, short: :t, help: "Target migration version"
     option :dry_run, type: :boolean, help: "Show what would be run without applying"
+
+    # :parse turns the raw string into a domain value (a positive integer).
+    option :steps, type: :string,
+      parse: fn s ->
+        case Integer.parse(s) do
+          {n, ""} when n > 0 -> {:ok, n}
+          _ -> {:error, "steps must be a positive integer"}
+        end
+      end,
+      help: "Apply only this many pending migrations"
+
+    # :deprecated shows a marker in help and warns to stderr on use.
+    option :to, type: :string, deprecated: "use --target instead",
+      help: "Deprecated alias for --target"
 
     before_run fn args ->
       IO.puts("Connecting to database...")
@@ -126,17 +140,20 @@ defmodule Devtool.Db.Migrate do
   @impl Cheer.Command
   def run(args, _raw) do
     prefix = if args[:dry_run], do: "[dry run] ", else: ""
+    limit  = if args[:steps], do: " (#{args[:steps]} step(s))", else: ""
 
-    case args[:target] do
-      nil    -> IO.puts("#{prefix}Running all pending migrations...")
-      target -> IO.puts("#{prefix}Migrating to version #{target}...")
+    case args[:target] || args[:to] do
+      nil    -> IO.puts("#{prefix}Running all pending migrations#{limit}...")
+      target -> IO.puts("#{prefix}Migrating to version #{target}#{limit}...")
     end
   end
 end
 ```
 
 Hooks run in order: root `persistent_before_run`, then this command's
-`before_run`, then `run/2`, then `after_run`.
+`before_run`, then `run/2`, then `after_run`. `--steps abc` fails before `run/2`
+with `error: --steps: steps must be a positive integer`, and using `--to` prints
+a deprecation warning to stderr.
 
 ## A leaf with choices and cross-param validation: `db seed`
 
@@ -153,6 +170,10 @@ defmodule Devtool.Db.Seed do
 
     option :clean, type: :boolean, help: "Truncate tables before seeding"
 
+    # :value_delimiter splits one value into a list: --tables users,posts
+    option :tables, type: :string, value_delimiter: ",",
+      help: "Only seed these tables (comma-separated)"
+
     validate fn args ->
       if args[:clean] && args[:env] == "staging" do
         {:error, "cannot use --clean with staging environment"}
@@ -165,13 +186,17 @@ defmodule Devtool.Db.Seed do
   @impl Cheer.Command
   def run(args, _raw) do
     if args[:clean], do: IO.puts("Truncating tables...")
-    IO.puts("Seeding #{args[:env]} database...")
+
+    case args[:tables] do
+      nil    -> IO.puts("Seeding #{args[:env]} database...")
+      tables -> IO.puts("Seeding #{args[:env]} database (tables: #{Enum.join(tables, ", ")})...")
+    end
   end
 end
 ```
 
 Type coercion, choices validation, and the cross-param `validate` all run
-before `run/2`.
+before `run/2`. `--tables users,posts` arrives as `["users", "posts"]`.
 
 ## Run it
 
@@ -191,7 +216,24 @@ mix run -e 'Devtool.CLI.main(["db", "migrate", "--target", "20240101"])'
 mix run -e 'Devtool.CLI.main(["db", "seed", "--env", "staging", "--clean"])'
 # error: cannot use --clean with staging environment
 
+mix run -e 'Devtool.CLI.main(["db", "migrate", "--steps", "3"])'
+# Connecting to database...
+# Running all pending migrations (3 step(s))...
+# Done.
+
+mix run -e 'Devtool.CLI.main(["db", "seed", "--tables", "users,posts"])'
+# Seeding development database (tables: users, posts)...
+
 mix run -e 'Devtool.CLI.main(["server", "--help"])'
+```
+
+## Generate a reference document
+
+`Cheer.Reference` walks the command tree and renders a markdown reference, handy
+for a docs site:
+
+```sh
+mix run -e 'IO.puts(Cheer.Reference.generate(Devtool.CLI, :markdown, prog: "devtool"))'
 ```
 
 ## What it shows
@@ -202,7 +244,11 @@ mix run -e 'Devtool.CLI.main(["server", "--help"])'
 - **Mutually exclusive option group** with auto-generated error message.
 - **Choices** for string-enum options.
 - **Cross-param validator** enforcing a rule across two options.
+- **Custom parser** (`:parse`) turning `--steps` into a positive integer.
+- **Deprecation marker** (`:deprecated`) on `--to`.
+- **Delimited values** (`:value_delimiter`) splitting `--tables`.
 - **Env var fallback** combined with a validator.
+- **Markdown reference generation** via `Cheer.Reference`.
 
 ## See also
 
