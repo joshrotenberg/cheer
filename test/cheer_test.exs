@@ -3577,4 +3577,28 @@ defmodule CheerTest do
       assert {:ok, %{level: 7}} = Cheer.run(TestDefaultMissing, ["--level=7"])
     end
   end
+
+  # -- Help text wrapping (#101) -----------------------------------------------
+
+  describe "Cheer.Help.wrap_text/3 (#101)" do
+    test "wraps to width with a hanging indent, first line unindented" do
+      assert Cheer.Help.wrap_text("one two three four five six", 11, 4) ==
+               "one two\n    three four\n    five six"
+    end
+
+    test "text shorter than the width is unchanged" do
+      assert Cheer.Help.wrap_text("short enough", 40, 4) == "short enough"
+    end
+
+    test "a single word longer than the width is not broken" do
+      assert Cheer.Help.wrap_text("supercalifragilistic", 8, 2) == "supercalifragilistic"
+    end
+
+    test "help renders on single lines when output is not a tty (unchanged)" do
+      # Under capture_io there is no tty, so wrapping is disabled and each option
+      # description stays on one line.
+      output = capture_io(fn -> Cheer.run(TestDefaults, ["--help"]) end)
+      refute output =~ ~r/\n\s{10,}\S/
+    end
+  end
 end

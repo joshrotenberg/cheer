@@ -92,7 +92,10 @@ defmodule Cheer.Help do
         deprecated = if deprecated != "", do: " " <> deprecated, else: ""
 
         IO.puts(
-          "  #{String.pad_trailing("<#{display_name}>", 20)} #{help}#{required}#{deprecated}"
+          wrap_line(
+            "  #{String.pad_trailing("<#{display_name}>", 20)} ",
+            "#{help}#{required}#{deprecated}"
+          )
         )
       end
 
@@ -182,6 +185,52 @@ defmodule Cheer.Help do
 
   defp maybe_append(list, nil, _fun), do: list
   defp maybe_append(list, value, fun), do: list ++ [fun.(value)]
+
+  # Terminal width for wrapping, or `:no_wrap` when output is not a tty (piped,
+  # captured in tests, CI). When not a tty, help renders on single lines exactly
+  # as before, so wrapping never changes non-interactive output.
+  defp terminal_width do
+    case :io.columns() do
+      {:ok, cols} when cols > 0 -> cols
+      _ -> :no_wrap
+    end
+  end
+
+  # Place `desc` after `prefix`, wrapping to the terminal width with continuation
+  # lines hanging-indented under the description column.
+  defp wrap_line(prefix, desc) do
+    width = terminal_width()
+    indent = String.length(prefix)
+    avail = if width == :no_wrap, do: 0, else: width - indent
+
+    if width == :no_wrap or avail < 12 or String.length(prefix) + String.length(desc) <= width do
+      prefix <> desc
+    else
+      prefix <> wrap_text(desc, avail, indent)
+    end
+  end
+
+  @doc false
+  # Wrap `text` to `width` columns, joining lines with a newline + `indent`
+  # spaces. The first line carries no leading indent (it follows a prefix).
+  def wrap_text(text, width, indent) do
+    {lines, current} =
+      text
+      |> String.split(" ", trim: true)
+      |> Enum.reduce({[], ""}, fn word, {lines, current} ->
+        candidate = if current == "", do: word, else: current <> " " <> word
+
+        if String.length(candidate) > width and current != "" do
+          {[current | lines], word}
+        else
+          {lines, candidate}
+        end
+      end)
+
+    [current | lines]
+    |> Enum.reverse()
+    |> Enum.join("\n" <> String.duplicate(" ", indent))
+  end
 
   # `:deprecated` is `true` for a bare marker or a string for a reason.
   defp deprecated_label(nil), do: []
@@ -305,7 +354,10 @@ defmodule Cheer.Help do
 
     suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
 
-    "  #{short}--#{String.pad_trailing(flag_name <> value_suffix, 16)} #{help}#{suffix}"
+    wrap_line(
+      "  #{short}--#{String.pad_trailing(flag_name <> value_suffix, 16)} ",
+      "#{help}#{suffix}"
+    )
   end
 
   # Render an option name as the long flag the parser accepts.
