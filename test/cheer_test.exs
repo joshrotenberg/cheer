@@ -1132,6 +1132,46 @@ defmodule CheerTest do
     end
   end
 
+  defmodule TestRequiredGroup do
+    use Cheer.Command
+
+    command "rg" do
+      group :src, required: true do
+        option(:file, type: :string)
+        option(:stdin, type: :boolean)
+      end
+
+      group :one, required: true, mutually_exclusive: true do
+        option(:a, type: :boolean)
+        option(:b, type: :boolean)
+      end
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "required group (#100)" do
+    test "errors when no member of a required group is provided" do
+      output = capture_io(fn -> Cheer.run(TestRequiredGroup, ["--a"]) end)
+      assert output =~ "one of --file, --stdin is required (group: src)"
+    end
+
+    test "accepts when at least one member is provided" do
+      assert {:ok, _} = Cheer.run(TestRequiredGroup, ["--file", "x", "--a"])
+    end
+
+    test "required + mutually_exclusive means exactly one" do
+      assert {:ok, _} = Cheer.run(TestRequiredGroup, ["--file", "x", "--a"])
+
+      none = capture_io(fn -> Cheer.run(TestRequiredGroup, ["--file", "x"]) end)
+      assert none =~ "one of --a, --b is required"
+
+      both = capture_io(fn -> Cheer.run(TestRequiredGroup, ["--file", "x", "--a", "--b"]) end)
+      assert both =~ "mutually exclusive"
+    end
+  end
+
   # -- "Did you mean?" suggestions --------------------------------------------
 
   describe "typo suggestions" do

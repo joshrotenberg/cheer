@@ -330,6 +330,10 @@ defmodule Cheer.Command.DSL do
   Supports:
     * `mutually_exclusive: true` -- at most one option in the group can be set
     * `co_occurring: true` -- all or none of the options must be set
+    * `required: true` -- at least one option in the group must be set
+
+  Constraints combine: `mutually_exclusive: true, required: true` means exactly
+  one member must be set.
   """
   defmacro group(name, opts, do: block) do
     quote do

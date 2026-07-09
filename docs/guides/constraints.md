@@ -101,6 +101,24 @@ end
 error: options --username, --password must be used together (group: auth)
 ```
 
+### Required (one-of)
+
+At least one of the group's options must be set:
+
+```elixir
+group :source, required: true do
+  option :file, type: :string
+  option :stdin, type: :boolean
+end
+```
+
+```
+error: one of --file, --stdin is required (group: source)
+```
+
+Constraints combine: `mutually_exclusive: true, required: true` means exactly one
+member must be set.
+
 ## Picking the right tool
 
 - One option conditionally required based on another's **value**: `:required_if`.
