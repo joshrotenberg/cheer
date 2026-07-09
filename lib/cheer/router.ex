@@ -463,9 +463,47 @@ defmodule Cheer.Router do
             "--#{flag_string(name)} is required unless #{format_dep_list(deps)} is provided"}}
         end
 
+      Keyword.has_key?(opts, :required_if_all) ->
+        checks = Keyword.fetch!(opts, :required_if_all)
+
+        if match_required_if_all?(checks, args, provided) do
+          {:halt, {:error, "--#{flag_string(name)} is required when #{format_if_all(checks)}"}}
+        else
+          {:cont, :ok}
+        end
+
+      Keyword.has_key?(opts, :required_unless_all) ->
+        deps = Keyword.fetch!(opts, :required_unless_all)
+
+        if all_present?(deps, provided) do
+          {:cont, :ok}
+        else
+          {:halt,
+           {:error,
+            "--#{flag_string(name)} is required unless #{format_dep_list(deps)} are all provided"}}
+        end
+
       true ->
         {:cont, :ok}
     end
+  end
+
+  # required_if matches when ANY condition holds; required_if_all when they all do.
+  defp match_required_if_all?(checks, args, provided) when is_list(checks) do
+    Enum.all?(checks, fn {dep, expected} ->
+      MapSet.member?(provided, dep) and match?({:ok, ^expected}, Map.fetch(args, dep))
+    end)
+  end
+
+  defp all_present?(name, provided) when is_atom(name), do: MapSet.member?(provided, name)
+
+  defp all_present?(names, provided) when is_list(names),
+    do: Enum.all?(names, &MapSet.member?(provided, &1))
+
+  defp format_if_all(checks) do
+    Enum.map_join(checks, " and ", fn {dep, val} ->
+      "--#{flag_string(dep)} is #{format_required_value(val)}"
+    end)
   end
 
   # Only deps the user actually supplied can trigger a required_if: a dependency

@@ -240,8 +240,12 @@ defmodule Cheer.Command.DSL do
     * `:requires` - atom or list of atoms; the named option(s) must also be present
     * `:required_if` - keyword list `[other_opt: value]`; this option is required when
       any pair matches (i.e. `args[other_opt] == value`)
+    * `:required_if_all` - keyword list `[other_opt: value]`; required only when
+      every pair matches
     * `:required_unless` - atom or list of atoms; this option is required unless any
       of the named options are present
+    * `:required_unless_all` - list of atoms; required unless all of the named
+      options are present
     * `:validate` - `fn value -> :ok | {:error, msg} end`
 
   Boolean options automatically support `--no-<name>` negation (e.g. `--no-color`).
