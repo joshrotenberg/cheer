@@ -32,7 +32,7 @@ defmodule Cheer.Help do
     IO.puts("")
 
     if meta[:usage] do
-      IO.puts("Usage: #{meta.usage}")
+      IO.puts(Cheer.Ansi.paint("Usage:", :bright) <> " #{meta.usage}")
     else
       IO.puts(format_usage(meta, prog))
     end
@@ -55,7 +55,7 @@ defmodule Cheer.Help do
       |> sort_subcommands()
 
     if visible_subcommands != [] do
-      IO.puts("COMMANDS:")
+      IO.puts(Cheer.Ansi.paint("COMMANDS:", :bright))
 
       for sub <- visible_subcommands do
         sub_meta = sub.__cheer_meta__()
@@ -82,7 +82,7 @@ defmodule Cheer.Help do
     has_trailing = meta[:trailing_var_arg] != nil
 
     if visible_arguments != [] or has_trailing do
-      IO.puts("ARGUMENTS:")
+      IO.puts(Cheer.Ansi.paint("ARGUMENTS:", :bright))
 
       for {name, arg_opts} <- visible_arguments do
         display_name = Keyword.get(arg_opts, :value_name, Atom.to_string(name))
@@ -131,13 +131,13 @@ defmodule Cheer.Help do
       {default_section, headed_sections} = group_options_by_heading(visible_options)
 
       if default_section != [] do
-        IO.puts("OPTIONS:")
+        IO.puts(Cheer.Ansi.paint("OPTIONS:", :bright))
         for opt <- default_section, do: IO.puts(format_option(opt, long))
         IO.puts("")
       end
 
       for {heading, opts_in_heading} <- headed_sections do
-        IO.puts("#{String.upcase(heading)}:")
+        IO.puts(Cheer.Ansi.paint("#{String.upcase(heading)}:", :bright))
         for opt <- opts_in_heading, do: IO.puts(format_option(opt, long))
         IO.puts("")
       end
@@ -200,10 +200,11 @@ defmodule Cheer.Help do
   # lines hanging-indented under the description column.
   defp wrap_line(prefix, desc) do
     width = terminal_width()
-    indent = String.length(prefix)
+    # Ignore ANSI codes (e.g. a colored flag) when measuring column widths.
+    indent = Cheer.Ansi.visible_length(prefix)
     avail = if width == :no_wrap, do: 0, else: width - indent
 
-    if width == :no_wrap or avail < 12 or String.length(prefix) + String.length(desc) <= width do
+    if width == :no_wrap or avail < 12 or indent + String.length(desc) <= width do
       prefix <> desc
     else
       prefix <> wrap_text(desc, avail, indent)
@@ -293,7 +294,7 @@ defmodule Cheer.Help do
   defp format_option({name, opt_opts}, long) do
     short =
       if Keyword.has_key?(opt_opts, :short),
-        do: "-#{Keyword.get(opt_opts, :short)}, ",
+        do: Cheer.Ansi.paint("-#{Keyword.get(opt_opts, :short)}", :cyan) <> ", ",
         else: "    "
 
     help = pick_help(opt_opts, long)
@@ -354,10 +355,9 @@ defmodule Cheer.Help do
 
     suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
 
-    wrap_line(
-      "  #{short}--#{String.pad_trailing(flag_name <> value_suffix, 16)} ",
-      "#{help}#{suffix}"
-    )
+    flag_col = Cheer.Ansi.paint("--#{String.pad_trailing(flag_name <> value_suffix, 16)}", :cyan)
+
+    wrap_line("  #{short}#{flag_col} ", "#{help}#{suffix}")
   end
 
   # Render an option name as the long flag the parser accepts.
@@ -371,7 +371,7 @@ defmodule Cheer.Help do
   defp num_args_label(%Range{first: first, last: last}), do: "(#{first}..#{last} values)"
 
   defp format_usage(meta, prog) do
-    parts = ["Usage: #{prog}"]
+    parts = ["#{Cheer.Ansi.paint("Usage:", :bright)} #{prog}"]
 
     parts =
       if meta.subcommands != [] do

@@ -139,6 +139,13 @@ warning: --old-flag is deprecated: use --new-flag
 warning: command 'old-name' is deprecated: use `new-name` instead
 ```
 
+## Color
+
+When help or an error is printed to an interactive terminal, section headings are
+bold, flags are cyan, and the `error:` prefix is red. Color is disabled
+automatically when output is not a tty (piped, redirected, captured) or when the
+`NO_COLOR` environment variable is set, so scripts and snapshots stay plain.
+
 ## Line wrapping
 
 When help is printed to an interactive terminal, long option and argument

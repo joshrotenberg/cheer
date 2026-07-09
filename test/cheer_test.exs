@@ -3601,4 +3601,25 @@ defmodule CheerTest do
       refute output =~ ~r/\n\s{10,}\S/
     end
   end
+
+  # -- Colored output (#102) ---------------------------------------------------
+
+  describe "Cheer.Ansi (#102)" do
+    test "paint returns plain text when styling is disabled (non-tty)" do
+      assert Cheer.Ansi.paint("hello", :red) == "hello"
+    end
+
+    test "visible_length ignores ANSI escape sequences" do
+      assert Cheer.Ansi.visible_length("\e[31mred\e[0m") == 3
+      assert Cheer.Ansi.visible_length("plain") == 5
+    end
+
+    test "help and error output contain no ANSI codes when not a tty" do
+      help = capture_io(fn -> Cheer.run(TestDefaults, ["--help"]) end)
+      refute help =~ "\e["
+
+      err = capture_io(fn -> Cheer.run(TestDefaults, ["--nope", "x"]) end)
+      refute err =~ "\e["
+    end
+  end
 end
