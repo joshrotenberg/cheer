@@ -555,6 +555,10 @@ defmodule Cheer.Router do
           flags = Enum.map_join(members, ", ", &"--#{flag_string(&1)}")
           {:halt, {:error, "options #{flags} must be used together (group: #{name})"}}
 
+        Keyword.get(opts, :required, false) and set_members == [] ->
+          flags = Enum.map_join(members, ", ", &"--#{flag_string(&1)}")
+          {:halt, {:error, "one of #{flags} is required (group: #{name})"}}
+
         true ->
           {:cont, :ok}
       end
