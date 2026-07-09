@@ -43,6 +43,24 @@ argument :input, type: :string, value_name: "FILE"
 # Usage: convert <FILE>
 ```
 
+## Variadic arguments (`:num_args`)
+
+An argument can collect several positional tokens into a list with `:num_args`,
+an exact integer or a range:
+
+```elixir
+argument :files, type: :string, num_args: 1..3, help: "One to three files"
+# a b c  ->  args[:files] == ["a", "b", "c"]
+
+argument :point, type: :integer, num_args: 2
+# 1 2    ->  args[:point] == [1, 2]
+```
+
+Consumption is greedy up to the max, so a variadic argument should be declared
+last; a plain argument still takes exactly one token. Too few tokens is a usage
+error (`<files> expects between 1 and 3 values, got 0`). This is a bounded
+alternative to `trailing_var_arg`, which collects an unbounded rest.
+
 ## Trailing variadic args
 
 Collect an arbitrary number of trailing tokens under a named key:
@@ -93,6 +111,15 @@ argument :internal, type: :string, hide: true
 ```
 
 Accepted by the parser; omitted from help output.
+
+## Deprecated arguments
+
+Mark an argument deprecated with `true` (a bare marker) or a string reason. The
+marker shows in help:
+
+```elixir
+argument :path, type: :string, deprecated: "use --file instead"
+```
 
 ## See also
 

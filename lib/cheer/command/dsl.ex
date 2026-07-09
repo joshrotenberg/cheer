@@ -174,10 +174,12 @@ defmodule Cheer.Command.DSL do
       an exact count or a range (`1..3`) for a variable count. Consumption is
       greedy (up to the max), so a variadic argument should be declared last. Too
       few values is a usage error.
+    * `:choices` - list of allowed values
     * `:help` - help text shown in `--help`
     * `:long_help` - extended help text shown by `--help` (long form)
     * `:value_name` - placeholder name in help (e.g. `"FILE"`)
     * `:hide` - `true` to hide from help output
+    * `:deprecated` - `true` for a bare marker, or a string reason; shown in help
     * `:display_order` - integer controlling position in help (lower first)
     * `:validate` - `fn value -> :ok | {:error, msg} end`
     * `:parse` - `fn value -> {:ok, parsed} | {:error, msg} end` to transform the
@@ -250,6 +252,8 @@ defmodule Cheer.Command.DSL do
     * `:long_help` - extended help text shown by `--help` (long form)
     * `:value_name` - placeholder name in help (e.g. `"FILE"`)
     * `:hide` - `true` to hide from help output
+    * `:deprecated` - `true` for a bare marker, or a string reason; shown in help
+      and warned to stderr when the option is used
     * `:global` - `true` to propagate to all subcommands
     * `:aliases` - list of alternative long names (e.g. `[:colour]` for `:color`)
     * `:display_order` - integer controlling position within its help section (lower first)

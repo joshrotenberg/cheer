@@ -42,9 +42,11 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
 - Custom value parsers (`:parse`) that transform input into domain types
 - Per-param and cross-param validation, choices, conditional-required
 - Per-option relations (`:conflicts_with`, `:requires`) and param groups
-- Env var fallback, defaults, boolean negation (`--no-*`)
-- Auto-generated help with headings, display order, before/after text, and
-  hidden options, arguments, and subcommands (`hide`)
+- Env var fallback, defaults (including `:default_missing_value`), boolean
+  negation (`--no-*`)
+- Deprecation markers (`deprecated`) for options, arguments, and subcommands
+- Auto-generated help with headings, display order, before/after text, hidden
+  items (`hide`), terminal-width wrapping, and color (respecting `NO_COLOR`)
 - Prefix inference and `"Did you mean?"` suggestions for mistyped commands and
   flags
 - Optional subcommands (`:args_conflicts_with_subcommands`) and external
