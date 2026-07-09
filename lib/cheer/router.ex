@@ -308,13 +308,15 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with {:ok, args} <- apply_parsers(args, all_options ++ meta.arguments),
+          arg_names = MapSet.new(meta.arguments, fn {n, _} -> n end)
+
+          with {:ok, args} <- apply_parsers(args, all_options ++ meta.arguments, arg_names),
                :ok <- validate_num_args(num_args_values, all_options),
                :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
                # Include arguments so argument-level :validate and :choices run.
-               :ok <- validate_params(args, all_options ++ meta.arguments),
+               :ok <- validate_params(args, all_options ++ meta.arguments, arg_names),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
           else
@@ -340,12 +342,16 @@ defmodule Cheer.Router do
 
     all_options = meta.options ++ inherited_globals
 
-    # Pull num_args flags out first (head mode: stop at the external subcommand),
-    # then parse the remainder. OptionParser cannot express multi-value flags.
+    # Pull num_args and hyphen-value flags out first (head mode: stop at the
+    # external subcommand), then parse the remainder. OptionParser cannot express
+    # multi-value flags or `-`-leading values.
     {num_args_values, argv} = extract_num_args(argv, all_options, true)
+    {hyphen_values, argv} = extract_hyphen_values(argv, all_options, true)
 
     parser_options =
-      Enum.reject(all_options, fn {_name, o} -> Keyword.has_key?(o, :num_args) end)
+      Enum.reject(all_options, fn {_name, o} = opt ->
+        Keyword.has_key?(o, :num_args) or single_value_hyphen_opt?(opt)
+      end)
 
     {option_parser_opts, option_aliases} = build_option_parser_spec(parser_options)
 
@@ -361,6 +367,8 @@ defmodule Cheer.Router do
       args = apply_env_vars(args, all_options)
       args = Map.merge(args, parsed_map)
       args = Map.merge(args, num_args_values)
+      args = Map.merge(args, hyphen_values)
+      args = apply_value_delimiters(args, all_options)
 
       args =
         case positional do
@@ -368,7 +376,8 @@ defmodule Cheer.Router do
           [name | rest] -> Map.put(args, :external_subcommand, {name, rest})
         end
 
-      provided = MapSet.new(Map.keys(parsed_map) ++ Map.keys(num_args_values))
+      provided =
+        MapSet.new(Map.keys(parsed_map) ++ Map.keys(num_args_values) ++ Map.keys(hyphen_values))
 
       missing = missing_required_options(all_options, args)
 
@@ -378,13 +387,15 @@ defmodule Cheer.Router do
           :handled
 
         true ->
-          with {:ok, args} <- apply_parsers(args, all_options ++ meta.arguments),
+          arg_names = MapSet.new(meta.arguments, fn {n, _} -> n end)
+
+          with {:ok, args} <- apply_parsers(args, all_options ++ meta.arguments, arg_names),
                :ok <- validate_num_args(num_args_values, all_options),
                :ok <- validate_conditional_required(args, all_options, provided),
                :ok <- validate_constraints(all_options, provided),
                :ok <- validate_groups(provided, Map.get(meta, :groups, %{})),
                # Include arguments so argument-level :validate and :choices run.
-               :ok <- validate_params(args, all_options ++ meta.arguments),
+               :ok <- validate_params(args, all_options ++ meta.arguments, arg_names),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             {:ok, args}
           else
@@ -656,13 +667,13 @@ defmodule Cheer.Router do
   # Apply each param's :parse fn to its value, transforming it into a domain
   # value. Runs before validation so :choices/:validate see the parsed value. A
   # list value (multi, num_args, value_delimiter) is parsed element-wise.
-  defp apply_parsers(args, params) do
+  defp apply_parsers(args, params, arg_names) do
     Enum.reduce_while(params, {:ok, args}, fn {name, opts}, {:ok, acc} ->
       with fun when is_function(fun, 1) <- Keyword.get(opts, :parse),
            {:ok, value} <- Map.fetch(acc, name) do
         case apply_parse_value(fun, value) do
           {:ok, parsed} -> {:cont, {:ok, Map.put(acc, name, parsed)}}
-          {:error, msg} -> {:halt, {:error, "--#{flag_string(name)}: #{msg}"}}
+          {:error, msg} -> {:halt, {:error, "#{param_label(name, arg_names)}: #{msg}"}}
         end
       else
         _ -> {:cont, {:ok, acc}}
@@ -672,7 +683,7 @@ defmodule Cheer.Router do
 
   defp apply_parse_value(fun, values) when is_list(values) do
     Enum.reduce_while(values, {:ok, []}, fn v, {:ok, acc} ->
-      case fun.(v) do
+      case call_user_fun(fun, v) do
         {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
         {:error, _} = err -> {:halt, err}
       end
@@ -683,13 +694,22 @@ defmodule Cheer.Router do
     end
   end
 
-  defp apply_parse_value(fun, value), do: fun.(value)
+  defp apply_parse_value(fun, value), do: call_user_fun(fun, value)
 
-  defp validate_params(args, options) do
+  # Run a user-supplied :parse / :validate function, turning a raised exception
+  # into a clean {:error, msg} so a buggy function cannot crash the whole program
+  # (and defeat Cheer.main/3's exit-code handling).
+  defp call_user_fun(fun, value) do
+    fun.(value)
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  defp validate_params(args, options, arg_names) do
     Enum.reduce_while(options, :ok, fn {name, opts}, _acc ->
       case Map.fetch(args, name) do
         {:ok, value} ->
-          with :ok <- validate_choices(name, value, opts),
+          with :ok <- validate_choices(name, value, opts, arg_names),
                :ok <- validate_custom(name, value, opts) do
             {:cont, :ok}
           else
@@ -702,7 +722,7 @@ defmodule Cheer.Router do
     end)
   end
 
-  defp validate_choices(name, value, opts) do
+  defp validate_choices(name, value, opts, arg_names) do
     case Keyword.get(opts, :choices) do
       nil ->
         :ok
@@ -714,7 +734,7 @@ defmodule Cheer.Router do
         if Enum.all?(values, &(to_string(&1) in allowed)) do
           :ok
         else
-          {:error, "--#{name} must be one of: #{Enum.join(choices, ", ")}"}
+          {:error, "#{param_label(name, arg_names)} must be one of: #{Enum.join(choices, ", ")}"}
         end
     end
   end
@@ -722,8 +742,13 @@ defmodule Cheer.Router do
   defp validate_custom(_name, value, opts) do
     case Keyword.get(opts, :validate) do
       nil -> :ok
-      fun when is_function(fun, 1) -> fun.(value)
+      fun when is_function(fun, 1) -> call_user_fun(fun, value)
     end
+  end
+
+  # A positional argument renders as <name>; an option as its kebab-cased flag.
+  defp param_label(name, arg_names) do
+    if MapSet.member?(arg_names, name), do: "<#{name}>", else: "--#{flag_string(name)}"
   end
 
   # -- Cross-param validators --
@@ -841,13 +866,16 @@ defmodule Cheer.Router do
   # Options with `allow_hyphen_values: true` that take a single value (not
   # num_args, boolean, or count) must have their value pulled out before
   # OptionParser, which would otherwise treat a `-`-prefixed value as a flag.
-  defp extract_hyphen_values(argv, options) do
+  #
+  # `head?` (external_subcommands) stops extraction at the first positional so
+  # the external subcommand name and its args are left for parse_head.
+  defp extract_hyphen_values(argv, options, head? \\ false) do
     hyphen_opts = Enum.filter(options, &single_value_hyphen_opt?/1)
 
     if hyphen_opts == [] do
       {%{}, argv}
     else
-      do_extract_hyphen_values(argv, num_args_lookup(hyphen_opts), %{}, [])
+      do_extract_hyphen_values(argv, num_args_lookup(hyphen_opts), %{}, [], head?)
     end
   end
 
@@ -857,31 +885,36 @@ defmodule Cheer.Router do
       Keyword.get(o, :type, :string) not in [:boolean, :count]
   end
 
-  defp do_extract_hyphen_values([], _lookup, collected, residual),
+  defp do_extract_hyphen_values([], _lookup, collected, residual, _head?),
     do: {collected, Enum.reverse(residual)}
 
-  defp do_extract_hyphen_values(["--" | rest], _lookup, collected, residual),
+  defp do_extract_hyphen_values(["--" | rest], _lookup, collected, residual, _head?),
     do: {collected, Enum.reverse(residual) ++ ["--" | rest]}
 
-  defp do_extract_hyphen_values([token | rest], lookup, collected, residual) do
+  defp do_extract_hyphen_values([token | rest] = all, lookup, collected, residual, head?) do
     case num_args_flag(token, lookup) do
       {{name, opts}, nil} ->
         case rest do
           [value | rest2] ->
             collected = Map.put(collected, name, coerce_arg(value, opts))
-            do_extract_hyphen_values(rest2, lookup, collected, residual)
+            do_extract_hyphen_values(rest2, lookup, collected, residual, head?)
 
           [] ->
             # Flag with no following value: leave it for the normal parse path.
-            do_extract_hyphen_values([], lookup, collected, [token | residual])
+            do_extract_hyphen_values([], lookup, collected, [token | residual], head?)
         end
 
       {{name, opts}, inline} ->
         collected = Map.put(collected, name, coerce_arg(inline, opts))
-        do_extract_hyphen_values(rest, lookup, collected, residual)
+        do_extract_hyphen_values(rest, lookup, collected, residual, head?)
 
       :nomatch ->
-        do_extract_hyphen_values(rest, lookup, collected, [token | residual])
+        # In head mode the first positional is the external subcommand: stop.
+        if head? and not String.starts_with?(token, "-") do
+          {collected, Enum.reverse(residual) ++ all}
+        else
+          do_extract_hyphen_values(rest, lookup, collected, [token | residual], head?)
+        end
     end
   end
 
