@@ -3622,4 +3622,78 @@ defmodule CheerTest do
       refute err =~ "\e["
     end
   end
+
+  # -- Markdown reference generation (#105) ------------------------------------
+
+  defmodule TestRefSub do
+    use Cheer.Command
+
+    command "deploy" do
+      about("Deploy the app")
+      argument(:env, type: :string, required: true, help: "Environment")
+      option(:force, type: :boolean, short: :f, help: "Skip confirmation")
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: :ok
+  end
+
+  defmodule TestRefHidden do
+    use Cheer.Command
+
+    command "secret" do
+      hide(true)
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: :ok
+  end
+
+  defmodule TestRefRoot do
+    use Cheer.Command
+
+    command "myapp" do
+      about("A demo CLI")
+
+      option(:level,
+        type: :integer,
+        default: 1,
+        choices: [1, 2, 3],
+        env: "LVL",
+        help: "Log level"
+      )
+
+      option(:internal, type: :boolean, hide: true)
+      subcommand(TestRefSub)
+      subcommand(TestRefHidden)
+    end
+  end
+
+  describe "Cheer.Reference markdown (#105)" do
+    setup do
+      %{md: Cheer.Reference.generate(TestRefRoot, :markdown, prog: "myapp")}
+    end
+
+    test "renders the root heading, about, and usage", %{md: md} do
+      assert md =~ "# myapp"
+      assert md =~ "A demo CLI"
+      assert md =~ "```\nmyapp [OPTIONS]\n```"
+    end
+
+    test "renders options with metadata", %{md: md} do
+      assert md =~ "- `--level` `<level>` -- Log level (default: 1, choices: 1, 2, 3, env: LVL)"
+    end
+
+    test "renders subcommands as nested sections with the full path", %{md: md} do
+      assert md =~ "## myapp deploy"
+      assert md =~ "myapp deploy [OPTIONS] <env>"
+      assert md =~ "- `<env>` -- Environment (required)"
+      assert md =~ "- `--force`, `-f` -- Skip confirmation"
+    end
+
+    test "omits hidden options and subcommands", %{md: md} do
+      refute md =~ "internal"
+      refute md =~ "secret"
+    end
+  end
 end
