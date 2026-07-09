@@ -3128,4 +3128,38 @@ defmodule CheerTest do
       assert {:ok, %{name: :foo}} = Cheer.run(TestParse, ["foo"])
     end
   end
+
+  # -- Compiler: no n-in-[] warning for single-sided validate/parse (#108) -----
+
+  describe "single-sided validate/parse compilation (#108)" do
+    test "a validate-only command compiles without an always-false conditional warning" do
+      src = """
+      defmodule WarnOnlyValidate do
+        use Cheer.Command
+        command "wov" do
+          option :x, type: :integer, validate: fn n -> if n > 0, do: :ok, else: {:error, "no"} end
+        end
+        def run(a, _r), do: a
+      end
+      """
+
+      warnings = capture_io(:stderr, fn -> Code.compile_string(src) end)
+      refute warnings =~ "always evaluate to false"
+    end
+
+    test "a parse-only command compiles without an always-false conditional warning" do
+      src = """
+      defmodule WarnOnlyParse do
+        use Cheer.Command
+        command "wop" do
+          option :y, type: :string, parse: fn s -> {:ok, String.upcase(s)} end
+        end
+        def run(a, _r), do: a
+      end
+      """
+
+      warnings = capture_io(:stderr, fn -> Code.compile_string(src) end)
+      refute warnings =~ "always evaluate to false"
+    end
+  end
 end

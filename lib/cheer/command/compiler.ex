@@ -114,25 +114,39 @@ defmodule Cheer.Command.Compiler do
   end
 
   # Reattach generated :validate / :parse accessor fns to the {name, opts} list.
+  # Each reattach branch is only emitted when its list is non-empty; an empty
+  # list would expand to `if n in []`, which the compiler flags as an always-false
+  # conditional in the user's generated __cheer_meta__/0.
   defp merge_accessors(params, has_validate, has_parse) do
     if has_validate == [] and has_parse == [] do
       Macro.escape(params)
     else
       quote do
         Enum.map(unquote(Macro.escape(params)), fn {n, o} ->
-          o =
-            if n in unquote(has_validate),
-              do: Keyword.put(o, :validate, &apply(__MODULE__, :"__cheer_validate_#{n}__", [&1])),
-              else: o
-
-          o =
-            if n in unquote(has_parse),
-              do: Keyword.put(o, :parse, &apply(__MODULE__, :"__cheer_parse_#{n}__", [&1])),
-              else: o
-
+          o = unquote(reattach_step(:validate, has_validate))
+          o = unquote(reattach_step(:parse, has_parse))
           {n, o}
         end)
       end
+    end
+  end
+
+  # An empty list means no such accessor: leave `o` untouched (no `if n in []`).
+  defp reattach_step(_kind, []), do: quote(do: o)
+
+  defp reattach_step(:validate, names) do
+    quote do
+      if n in unquote(names),
+        do: Keyword.put(o, :validate, &apply(__MODULE__, :"__cheer_validate_#{n}__", [&1])),
+        else: o
+    end
+  end
+
+  defp reattach_step(:parse, names) do
+    quote do
+      if n in unquote(names),
+        do: Keyword.put(o, :parse, &apply(__MODULE__, :"__cheer_parse_#{n}__", [&1])),
+        else: o
     end
   end
 
