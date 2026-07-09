@@ -1,6 +1,6 @@
 # Getting Started
 
-Cheer is a clap-inspired CLI framework for Elixir. Define your command tree
+Cheer is a [clap](https://crates.io/crates/clap)-inspired CLI framework for Elixir. Define your command tree
 once, get parsing, validation, help, shell completion, a REPL, and in-process
 testing for free.
 

@@ -5,7 +5,7 @@
 [![Hex Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/cheer)
 [![License](https://img.shields.io/hexpm/l/cheer.svg)](LICENSE)
 
-A clap-inspired CLI framework for Elixir. Define your command tree once and
+A [clap](https://crates.io/crates/clap)-inspired CLI framework for Elixir. Define your command tree once and
 get parsing, validation, help, shell completion, a REPL, and in-process
 testing for free.
 

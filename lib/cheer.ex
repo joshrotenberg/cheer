@@ -1,6 +1,6 @@
 defmodule Cheer do
   @moduledoc """
-  A clap-inspired CLI argument parsing framework for Elixir.
+  A [clap](https://crates.io/crates/clap)-inspired CLI argument parsing framework for Elixir.
 
   Provides declarative command definitions with arbitrarily nested subcommands,
   typed options, automatic help generation, and shell completion.
