@@ -3162,4 +3162,87 @@ defmodule CheerTest do
       refute warnings =~ "always evaluate to false"
     end
   end
+
+  # -- Router robustness (#109 #110 #111) --------------------------------------
+
+  defmodule TestExtValueXform do
+    use Cheer.Command
+
+    command "extx" do
+      external_subcommands(true)
+      option(:tags, type: :string, value_delimiter: ",")
+      option(:pattern, type: :string, allow_hyphen_values: true)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestMsgStyle do
+    use Cheer.Command
+
+    command "msg" do
+      argument(:color, type: :string, required: true, choices: ["red", "green"])
+      option(:log_level, type: :string, choices: ["info", "warn"])
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestRaising do
+    use Cheer.Command
+
+    command "rz" do
+      option(:p, type: :string, parse: fn _ -> raise "boom" end)
+      option(:v, type: :string, validate: fn _ -> raise "argh" end)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "value_delimiter and allow_hyphen_values under external_subcommands (#109)" do
+    test "value_delimiter is split on an external-subcommand command" do
+      assert {:ok, args} = Cheer.run(TestExtValueXform, ["--tags", "a,b,c", "deploy"])
+      assert args[:tags] == ["a", "b", "c"]
+      assert args[:external_subcommand] == {"deploy", []}
+    end
+
+    test "single-value allow_hyphen_values works on an external-subcommand command" do
+      assert {:ok, args} = Cheer.run(TestExtValueXform, ["--pattern", "-foo", "deploy"])
+      assert args[:pattern] == "-foo"
+      assert args[:external_subcommand] == {"deploy", []}
+    end
+  end
+
+  describe "choices error message styling (#110)" do
+    test "a positional argument renders as <name>, not a flag" do
+      output = capture_io(fn -> Cheer.run(TestMsgStyle, ["blue"]) end)
+      assert output =~ "<color> must be one of"
+      refute output =~ "--color"
+    end
+
+    test "an option name is kebab-cased in the error" do
+      output = capture_io(fn -> Cheer.run(TestMsgStyle, ["red", "--log-level", "bad"]) end)
+      assert output =~ "--log-level must be one of"
+      refute output =~ "--log_level"
+    end
+  end
+
+  describe "raising :parse / :validate functions (#111)" do
+    test "a raising :parse yields a clean usage error, not a crash" do
+      output =
+        capture_io(fn -> assert Cheer.run(TestRaising, ["--p", "x"]) == {:error, :usage} end)
+
+      assert output =~ "--p: boom"
+    end
+
+    test "a raising :validate yields a clean usage error, not a crash" do
+      output =
+        capture_io(fn -> assert Cheer.run(TestRaising, ["--v", "x"]) == {:error, :usage} end)
+
+      assert output =~ "argh"
+    end
+  end
 end
