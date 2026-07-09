@@ -119,7 +119,7 @@ defmodule Cheer.Router do
         {:error, :usage}
 
       _ ->
-        IO.puts("error: unknown command '#{token}'")
+        IO.puts("#{Cheer.Ansi.paint("error:", :red)} unknown command '#{token}'")
         {:error, :usage}
     end
   end
@@ -154,7 +154,7 @@ defmodule Cheer.Router do
         {:error, :usage}
 
       :none when meta.subcommands != [] and meta.subcommand_required ->
-        IO.puts("error: a subcommand is required")
+        IO.puts("#{Cheer.Ansi.paint("error:", :red)} a subcommand is required")
         IO.puts("")
         Cheer.Help.print(command, opts)
         {:error, :usage}
@@ -304,7 +304,7 @@ defmodule Cheer.Router do
           :handled
 
         pos_error = positional_count_error(meta.arguments, positional_map) ->
-          IO.puts("error: #{pos_error}")
+          IO.puts("#{Cheer.Ansi.paint("error:", :red)} #{pos_error}")
           :handled
 
         true ->
@@ -322,7 +322,7 @@ defmodule Cheer.Router do
             {:ok, args}
           else
             {:error, msg} ->
-              IO.puts("error: #{msg}")
+              IO.puts("#{Cheer.Ansi.paint("error:", :red)} #{msg}")
               :handled
           end
       end
@@ -402,7 +402,7 @@ defmodule Cheer.Router do
             {:ok, args}
           else
             {:error, msg} ->
-              IO.puts("error: #{msg}")
+              IO.puts("#{Cheer.Ansi.paint("error:", :red)} #{msg}")
               :handled
           end
       end
@@ -933,7 +933,7 @@ defmodule Cheer.Router do
   end
 
   defp print_ambiguous_subcommand(token, candidates) do
-    IO.puts("error: '#{token}' is ambiguous")
+    IO.puts("#{Cheer.Ansi.paint("error:", :red)} '#{token}' is ambiguous")
     IO.puts("candidates: #{Enum.join(candidates, ", ")}")
   end
 
@@ -1310,7 +1310,7 @@ defmodule Cheer.Router do
   end
 
   defp print_unknown_command(meta, token) do
-    IO.puts("error: unknown command '#{token}'")
+    IO.puts("#{Cheer.Ansi.paint("error:", :red)} unknown command '#{token}'")
 
     # Hidden commands stay dispatchable but are not advertised in suggestions or
     # the available-commands list.
@@ -1358,14 +1358,14 @@ defmodule Cheer.Router do
 
   defp print_missing_args_error(command, missing_names, opts) do
     labels = Enum.map_join(missing_names, ", ", &"<#{&1}>")
-    IO.puts("error: missing required argument(s): #{labels}")
+    IO.puts("#{Cheer.Ansi.paint("error:", :red)} missing required argument(s): #{labels}")
     IO.puts("")
     Cheer.Help.print(command, opts)
   end
 
   defp print_invalid_options_error(command, invalid, opts, all_options) do
     flags = Enum.map_join(invalid, ", ", fn {flag, _} -> flag end)
-    IO.puts("error: unknown option(s): #{flags}")
+    IO.puts("#{Cheer.Ansi.paint("error:", :red)} unknown option(s): #{flags}")
 
     candidates = option_name_candidates(all_options)
 
