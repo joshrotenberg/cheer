@@ -54,6 +54,17 @@ defmodule Cheer.Command.DSL do
   """
   defmacro hide(val \\ true), do: quote(do: @cheer_hide(unquote(val)))
 
+  @doc """
+  Mark this command as deprecated. Shows a `(deprecated)` marker in the parent's
+  help and prints a warning to stderr when the command is used. Pass a string to
+  include a reason (and a migration hint).
+
+      command "old-name" do
+        deprecated "use `new-name` instead"
+      end
+  """
+  defmacro deprecated(val \\ true), do: quote(do: @cheer_deprecated(unquote(val)))
+
   @doc "Require that a subcommand is provided (error instead of showing help)."
   defmacro subcommand_required(val), do: quote(do: @cheer_subcommand_required(unquote(val)))
 

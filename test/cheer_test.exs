@@ -3399,4 +3399,76 @@ defmodule CheerTest do
       assert output =~ "--ids: no bad"
     end
   end
+
+  # -- Deprecation markers (#106) ----------------------------------------------
+
+  defmodule TestDeprecatedSub do
+    use Cheer.Command
+
+    command "old" do
+      about("Legacy command")
+      deprecated("use `new` instead")
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: :ran
+  end
+
+  defmodule TestDeprecatedLeaf do
+    use Cheer.Command
+
+    command "dep" do
+      option(:legacy, type: :string, deprecated: true, help: "old flag")
+      option(:soon, type: :string, deprecated: "use --now", help: "phasing out")
+      option(:current, type: :string, help: "fine")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestDeprecatedRoot do
+    use Cheer.Command
+
+    command "app" do
+      about("root")
+      subcommand(TestDeprecatedSub)
+    end
+  end
+
+  describe "deprecation markers (#106)" do
+    test "help shows a (deprecated) marker on options, with the reason if given" do
+      output = capture_io(fn -> Cheer.run(TestDeprecatedLeaf, ["--help"]) end)
+      assert output =~ "old flag (deprecated)"
+      assert output =~ "phasing out (deprecated: use --now)"
+    end
+
+    test "help shows a (deprecated) marker on a subcommand" do
+      output = capture_io(fn -> Cheer.run(TestDeprecatedRoot, ["--help"]) end)
+      assert output =~ "old"
+      assert output =~ "(deprecated: use `new` instead)"
+    end
+
+    test "using a deprecated option warns to stderr but still runs" do
+      warnings = capture_io(:stderr, fn -> Cheer.run(TestDeprecatedLeaf, ["--legacy", "x"]) end)
+      assert warnings =~ "warning: --legacy is deprecated"
+    end
+
+    test "a deprecated option with a reason includes it in the warning" do
+      warnings = capture_io(:stderr, fn -> Cheer.run(TestDeprecatedLeaf, ["--soon", "y"]) end)
+      assert warnings =~ "warning: --soon is deprecated: use --now"
+    end
+
+    test "a non-deprecated option produces no warning" do
+      warnings = capture_io(:stderr, fn -> Cheer.run(TestDeprecatedLeaf, ["--current", "z"]) end)
+      refute warnings =~ "deprecated"
+    end
+
+    test "dispatching a deprecated subcommand warns and still runs" do
+      warnings =
+        capture_io(:stderr, fn -> assert Cheer.run(TestDeprecatedRoot, ["old"]) == :ran end)
+
+      assert warnings =~ "warning: command 'old' is deprecated: use `new` instead"
+    end
+  end
 end
