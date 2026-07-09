@@ -37,14 +37,19 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
 
 - Declarative macro DSL for commands, options, arguments, and subcommands
 - Typed options and arguments with automatic coercion
-- Repeated (`:multi`) and multi-value (`:num_args`) options
+- Repeated (`:multi`), multi-value (`:num_args`), delimited (`:value_delimiter`),
+  and hyphen-leading (`:allow_hyphen_values`) option values
+- Custom value parsers (`:parse`) that transform input into domain types
 - Per-param and cross-param validation, choices, conditional-required
 - Per-option relations (`:conflicts_with`, `:requires`) and param groups
 - Env var fallback, defaults, boolean negation (`--no-*`)
-- Auto-generated help with headings, display order, before/after text
-- Subcommand prefix inference and `"Did you mean?"` suggestions
+- Auto-generated help with headings, display order, before/after text, and
+  hidden options, arguments, and subcommands (`hide`)
+- Prefix inference and `"Did you mean?"` suggestions for mistyped commands and
+  flags
 - Optional subcommands (`:args_conflicts_with_subcommands`) and external
   subcommands for git-style plugin dispatchers
+- Escript and Mix task entry points (`Cheer.MixTask`)
 - Shell completion for bash, zsh, fish, and PowerShell
 - REPL mode driven by the same command tree
 - In-process test runner with output capture
