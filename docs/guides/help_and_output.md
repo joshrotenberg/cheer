@@ -139,6 +139,14 @@ warning: --old-flag is deprecated: use --new-flag
 warning: command 'old-name' is deprecated: use `new-name` instead
 ```
 
+## Line wrapping
+
+When help is printed to an interactive terminal, long option and argument
+descriptions wrap to the terminal width, with continuation lines hanging-indented
+under the description column. When output is not a tty (piped, redirected, or
+captured in tests), descriptions render on single lines unchanged, so scripts
+and snapshots stay stable.
+
 ## Flag naming
 
 Cheer converts atom option names to kebab-case in both the parser and help
