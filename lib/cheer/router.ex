@@ -256,19 +256,10 @@ defmodule Cheer.Router do
       args = Map.merge(args, hyphen_values)
       args = apply_value_delimiters(args, all_options)
 
-      {declared_positional, rest_args} = Enum.split(positional, length(meta.arguments))
+      {positional_map, rest_args, supplied_positional} =
+        assign_positionals(meta.arguments, positional)
 
-      supplied_positional =
-        meta.arguments
-        |> Enum.zip(declared_positional)
-        |> Enum.map(fn {{name, _opts}, _value} -> name end)
-
-      args =
-        meta.arguments
-        |> Enum.zip(declared_positional)
-        |> Enum.reduce(args, fn {{name, arg_opts}, value}, acc ->
-          Map.put(acc, name, coerce_arg(value, arg_opts))
-        end)
+      args = Map.merge(args, positional_map)
 
       # Names the user actually supplied (parsed flags, num_args flags, and
       # positionals present in argv). Constraint checks key off this rather than
@@ -306,6 +297,10 @@ defmodule Cheer.Router do
       cond do
         missing != [] ->
           print_missing_args_error(command, missing, opts)
+          :handled
+
+        pos_error = positional_count_error(meta.arguments, positional_map) ->
+          IO.puts("error: #{pos_error}")
           :handled
 
         true ->
@@ -429,6 +424,58 @@ defmodule Cheer.Router do
     end)
     |> Enum.map(fn {name, _o} -> name end)
   end
+
+  # -- Positional arguments --
+
+  # Assign positional tokens to declared arguments left to right. A plain
+  # argument takes one token; an argument with `:num_args` greedily takes up to
+  # `max` tokens into a list. Returns {value_map, remaining_tokens, supplied}.
+  defp assign_positionals(arguments, positional) do
+    Enum.reduce(arguments, {%{}, positional, []}, fn {name, opts}, {acc, remaining, supplied} ->
+      case Keyword.get(opts, :num_args) do
+        nil ->
+          case remaining do
+            [value | rest] ->
+              {Map.put(acc, name, coerce_arg(value, opts)), rest, [name | supplied]}
+
+            [] ->
+              {acc, [], supplied}
+          end
+
+        spec ->
+          {_min, max} = num_args_bounds(spec)
+          {taken, rest} = Enum.split(remaining, max)
+          values = Enum.map(taken, &coerce_arg(&1, opts))
+          supplied = if taken == [], do: supplied, else: [name | supplied]
+          {Map.put(acc, name, values), rest, supplied}
+      end
+    end)
+  end
+
+  # A `:num_args` positional must receive between min and max tokens. Consumption
+  # caps at max, so only the too-few case fails here. Returns the message or nil.
+  defp positional_count_error(arguments, positional_map) do
+    Enum.find_value(arguments, fn {name, opts} ->
+      case Keyword.get(opts, :num_args) do
+        nil ->
+          nil
+
+        spec ->
+          {min, max} = num_args_bounds(spec)
+          got = length(Map.get(positional_map, name, []))
+
+          if got >= min and got <= max,
+            do: nil,
+            else: positional_num_args_error(name, min, max, got)
+      end
+    end)
+  end
+
+  defp positional_num_args_error(name, min, max, got) when min == max,
+    do: "<#{name}> expects #{min} value(s), got #{got}"
+
+  defp positional_num_args_error(name, min, max, got),
+    do: "<#{name}> expects between #{min} and #{max} values, got #{got}"
 
   # -- Conditional required (required_if / required_unless) --
 

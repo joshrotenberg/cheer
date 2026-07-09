@@ -170,6 +170,10 @@ defmodule Cheer.Command.DSL do
 
     * `:type` - `:string` (default), `:integer`, `:float`, or `:boolean`
     * `:required` - `true` or `false` (default)
+    * `:num_args` - collect several positional tokens into a list: an integer for
+      an exact count or a range (`1..3`) for a variable count. Consumption is
+      greedy (up to the max), so a variadic argument should be declared last. Too
+      few values is a usage error.
     * `:help` - help text shown in `--help`
     * `:long_help` - extended help text shown by `--help` (long form)
     * `:value_name` - placeholder name in help (e.g. `"FILE"`)
