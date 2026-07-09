@@ -3471,4 +3471,71 @@ defmodule CheerTest do
       assert warnings =~ "warning: command 'old' is deprecated: use `new` instead"
     end
   end
+
+  # -- Positional variadic arguments (#104) ------------------------------------
+
+  defmodule TestPositionalRange do
+    use Cheer.Command
+
+    command "pr" do
+      argument(:files, type: :string, num_args: 1..3)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestPositionalExact do
+    use Cheer.Command
+
+    command "pe" do
+      argument(:point, type: :integer, num_args: 2)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TestPositionalMixed do
+    use Cheer.Command
+
+    command "pm" do
+      argument(:cmd, type: :string, required: true)
+      argument(:extra, type: :string, num_args: 1..2)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "positional variadic arguments (#104)" do
+    test "a range collects a variable number of tokens into a list" do
+      assert {:ok, %{files: ["a"]}} = Cheer.run(TestPositionalRange, ["a"])
+      assert {:ok, %{files: ["a", "b", "c"]}} = Cheer.run(TestPositionalRange, ["a", "b", "c"])
+    end
+
+    test "too few tokens for a range is a usage error" do
+      output = capture_io(fn -> Cheer.run(TestPositionalRange, []) end)
+      assert output =~ "<files> expects between 1 and 3 values, got 0"
+    end
+
+    test "an exact count coerces each element" do
+      assert {:ok, %{point: [1, 2]}} = Cheer.run(TestPositionalExact, ["1", "2"])
+    end
+
+    test "an exact count with the wrong number is a usage error" do
+      output = capture_io(fn -> Cheer.run(TestPositionalExact, ["1"]) end)
+      assert output =~ "<point> expects 2 value(s), got 1"
+    end
+
+    test "a fixed argument before a variadic one consumes one token first" do
+      assert {:ok, %{cmd: "go", extra: ["x", "y"]}} =
+               Cheer.run(TestPositionalMixed, ["go", "x", "y"])
+    end
+
+    test "the variadic argument still enforces its minimum after a fixed one" do
+      output = capture_io(fn -> Cheer.run(TestPositionalMixed, ["go"]) end)
+      assert output =~ "<extra> expects between 1 and 2 values, got 0"
+    end
+  end
 end
