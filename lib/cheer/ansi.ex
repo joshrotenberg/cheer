@@ -13,7 +13,8 @@ defmodule Cheer.Ansi do
   @doc "Wrap `text` in the given ANSI style (an atom or list of atoms) when enabled."
   def paint(text, style) do
     if enabled?() do
-      [style, text, :reset]
+      # IO.ANSI.format/2 appends the reset itself when emit? is true.
+      [style, text]
       |> List.flatten()
       |> IO.ANSI.format(true)
       |> IO.iodata_to_binary()

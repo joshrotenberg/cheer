@@ -319,6 +319,7 @@ defmodule Cheer.Router do
                :ok <- validate_params(args, all_options ++ meta.arguments, arg_names),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             warn_deprecated_options(all_options, provided)
+            warn_deprecated_arguments(meta.arguments, provided)
             {:ok, args}
           else
             {:error, msg} ->
@@ -399,6 +400,7 @@ defmodule Cheer.Router do
                :ok <- validate_params(args, all_options ++ meta.arguments, arg_names),
                :ok <- run_validators(args, Map.get(meta, :validators, [])) do
             warn_deprecated_options(all_options, provided)
+            warn_deprecated_arguments(meta.arguments, provided)
             {:ok, args}
           else
             {:error, msg} ->
@@ -1274,6 +1276,20 @@ defmodule Cheer.Router do
       case Keyword.get(opts, :deprecated) do
         dep when dep not in [nil, false] ->
           IO.puts(:stderr, deprecation_message("--#{flag_string(name)}", dep))
+
+        _ ->
+          :ok
+      end
+    end
+
+    :ok
+  end
+
+  defp warn_deprecated_arguments(arguments, provided) do
+    for {name, opts} <- arguments, MapSet.member?(provided, name) do
+      case Keyword.get(opts, :deprecated) do
+        dep when dep not in [nil, false] ->
+          IO.puts(:stderr, deprecation_message("<#{name}>", dep))
 
         _ ->
           :ok
