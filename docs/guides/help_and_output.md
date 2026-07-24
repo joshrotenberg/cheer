@@ -184,6 +184,22 @@ or let `Cheer.main/3` halt for you with conventional codes (`0` ok, `2` usage):
 def main(argv), do: Cheer.main(MyApp.CLI, argv, prog: "myapp")
 ```
 
+A command that needs codes of its own has to halt itself, but can still defer
+the cases it does not special-case to `Cheer.exit_code/1`, which is the same
+mapping `Cheer.main/3` uses:
+
+```elixir
+def main(argv) do
+  case Cheer.run(MyApp.CLI, argv, prog: "myapp") do
+    {:error, :not_found} -> System.halt(4)
+    other -> System.halt(Cheer.exit_code(other))
+  end
+end
+```
+
+`Cheer.exit_code/1` takes a `Cheer.parse/3` result too: `:handled` (help or
+version was printed) maps to `0`.
+
 ## See also
 
 - [Options](options.md) and [Arguments](arguments.md) for the declarations
