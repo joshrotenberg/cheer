@@ -3247,7 +3247,7 @@ defmodule CheerTest do
       refute warnings =~ "always evaluate to false"
     end
 
-    test "a parse-only command compiles without an always-false conditional warning" do
+    test "a command with only a :parse fn compiles without an always-false conditional warning" do
       src = """
       defmodule WarnOnlyParse do
         use Cheer.Command
@@ -3811,6 +3811,36 @@ defmodule CheerTest do
     end
   end
 
+  defmodule TestParseOnly do
+    use Cheer.Command
+
+    command "cfg" do
+      parse_only()
+
+      about("Configured from argv, never dispatched")
+
+      option(:transport,
+        type: :string,
+        default: "http",
+        choices: ["http", "stdio"],
+        help: "Transport"
+      )
+    end
+  end
+
+  defmodule TestParseOnlyWithRun do
+    use Cheer.Command
+
+    command "both" do
+      parse_only()
+
+      about("Declares parse_only but implements run/2 anyway")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ran, args}
+  end
+
   describe "Cheer.parse/3" do
     test "returns the matched command and args without invoking run/2" do
       assert {:ok, CheerTest.TestParseServe, args} =
@@ -3896,6 +3926,11 @@ defmodule CheerTest do
       assert output =~ "myapp"
     end
 
+    test "resolves a parse_only command, which has no run/2 at all" do
+      assert {:ok, CheerTest.TestParseOnly, %{transport: "stdio"}} =
+               Cheer.parse(TestParseOnly, ["--transport", "stdio"])
+    end
+
     test "run/3 still reports help and version as :ok" do
       capture_io(fn ->
         assert Cheer.run(TestParseRoot, ["--help"]) == :ok
@@ -3904,6 +3939,77 @@ defmodule CheerTest do
         assert Cheer.run(TestParseRoot, ["help", "serve"]) == :ok
         assert Cheer.run(TestParseRoot, []) == :ok
       end)
+    end
+  end
+
+  # -- parse_only (#140) -------------------------------------------------------
+
+  describe "parse_only" do
+    test "is carried in the command metadata" do
+      assert TestParseOnly.__cheer_meta__().parse_only
+      refute TestParseServe.__cheer_meta__().parse_only
+    end
+
+    test "a leaf that declares it compiles without the missing-run/2 warning" do
+      src = """
+      defmodule ParseOnlyQuiet do
+        use Cheer.Command
+        command "poq" do
+          parse_only()
+          option :x, type: :string
+        end
+      end
+      """
+
+      warnings = capture_io(:stderr, fn -> Code.compile_string(src) end)
+      refute warnings =~ "does not implement run/2"
+    end
+
+    test "a leaf without it still warns" do
+      src = """
+      defmodule ParseOnlyNoisy do
+        use Cheer.Command
+        command "pon" do
+          option :x, type: :string
+        end
+      end
+      """
+
+      warnings = capture_io(:stderr, fn -> Code.compile_string(src) end)
+      assert warnings =~ "is a leaf command (no subcommands) but does not implement run/2"
+    end
+
+    test "run/3 on a parse_only command raises, naming parse/3" do
+      assert_raise ArgumentError, ~r/declared parse_only.*Cheer\.parse\/3/s, fn ->
+        Cheer.run(TestParseOnly, [])
+      end
+    end
+
+    test "run/3 on a leaf with no handler and no marker raises too" do
+      src = """
+      defmodule ParseOnlyUnmarked do
+        use Cheer.Command
+        command "pou" do
+          option :x, type: :string
+        end
+      end
+      """
+
+      capture_io(:stderr, fn -> Code.compile_string(src) end)
+
+      assert_raise ArgumentError, ~r/leaf command but implements no run\/2/, fn ->
+        Cheer.run(ParseOnlyUnmarked, [])
+      end
+    end
+
+    test "a command that declares it and implements run/2 anyway still dispatches" do
+      assert {:ran, _args} = Cheer.run(TestParseOnlyWithRun, [])
+    end
+
+    test "help still renders for a parse_only command" do
+      output = capture_io(fn -> Cheer.run(TestParseOnly, ["--help"]) end)
+      assert output =~ "Configured from argv, never dispatched"
+      assert output =~ "--transport"
     end
   end
 end

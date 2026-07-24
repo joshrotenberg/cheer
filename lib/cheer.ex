@@ -105,6 +105,10 @@ defmodule Cheer do
   `before_run` and `persistent_before_run` hooks still run, since they shape the
   args. `after_run` hooks do not: nothing ran, so there is no result to pass
   them.
+
+  A command resolved only this way has no `run/2` to implement. Declare
+  `Cheer.Command.DSL.parse_only/1` in its `command` block so the compiler stops
+  asking for one.
   """
   @spec parse(module(), [String.t()], keyword()) ::
           {:ok, module(), map()} | :handled | {:error, :usage}

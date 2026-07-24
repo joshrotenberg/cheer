@@ -24,6 +24,11 @@ end
 Leaf commands (no subcommands) must implement `run/2`. Branch commands route
 argv to their children automatically.
 
+A leaf resolved with `Cheer.parse/3` rather than dispatched has no handler to
+implement. Declaring `parse_only()` in its `command` block says so, and the
+compiler stops requiring one. See the
+[server cookbook entry](cookbook/server.md).
+
 ## Argument
 
 A positional input. Matched by position, typed, optionally required.

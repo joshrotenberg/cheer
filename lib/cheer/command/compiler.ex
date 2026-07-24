@@ -16,6 +16,7 @@ defmodule Cheer.Command.Compiler do
     hide = Module.get_attribute(env.module, :cheer_hide) || false
     deprecated = Module.get_attribute(env.module, :cheer_deprecated) || false
     subcommand_required = Module.get_attribute(env.module, :cheer_subcommand_required) || false
+    parse_only = Module.get_attribute(env.module, :cheer_parse_only) || false
     propagate_version = Module.get_attribute(env.module, :cheer_propagate_version) || false
     infer_subcommands = Module.get_attribute(env.module, :cheer_infer_subcommands) || false
 
@@ -44,8 +45,10 @@ defmodule Cheer.Command.Compiler do
 
     raw_groups = Module.get_attribute(env.module, :cheer_groups) |> Enum.reverse()
 
-    # Validate: leaf commands (no subcommands) must define run/2
-    if subcommands == [] do
+    # Validate: leaf commands (no subcommands) must define run/2, unless the
+    # command declares parse_only/1, which says the tree is resolved with
+    # Cheer.parse/3 and never dispatched.
+    if subcommands == [] and not parse_only do
       unless Module.defines?(env.module, {:run, 2}) do
         IO.warn(
           "#{inspect(env.module)} is a leaf command (no subcommands) but does not implement run/2",
@@ -96,6 +99,7 @@ defmodule Cheer.Command.Compiler do
           hide: unquote(hide),
           deprecated: unquote(deprecated),
           subcommand_required: unquote(subcommand_required),
+          parse_only: unquote(parse_only),
           propagate_version: unquote(propagate_version),
           infer_subcommands: unquote(infer_subcommands),
           external_subcommands: unquote(external_subcommands),
