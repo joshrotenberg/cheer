@@ -3748,4 +3748,153 @@ defmodule CheerTest do
       assert md =~ "- `--legacy` `<legacy>` -- old flag (deprecated)"
     end
   end
+
+  # -- Cheer.parse/3 (#132) ----------------------------------------------------
+
+  defmodule TestParseServe do
+    use Cheer.Command
+
+    command "serve" do
+      about("Start the server")
+
+      option(:port, type: :integer, default: 4000, help: "Port to listen on")
+
+      option(:transport,
+        type: :string,
+        default: "http",
+        choices: ["http", "stdio"],
+        help: "Transport"
+      )
+
+      before_run(fn args -> Map.put(args, :before_run_ran, true) end)
+
+      after_run(fn result ->
+        send(self(), :after_run_ran)
+        result
+      end)
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: raise("run/2 must not be called in parse mode")
+  end
+
+  defmodule TestParseRoot do
+    use Cheer.Command
+
+    command "srv" do
+      about("A server")
+      version("9.9.9")
+
+      persistent_before_run(fn args -> Map.put(args, :persistent_ran, true) end)
+
+      subcommand(CheerTest.TestParseServe)
+    end
+  end
+
+  defmodule TestParseRequired do
+    use Cheer.Command
+
+    command "strictsrv" do
+      about("Requires a subcommand")
+      subcommand_required(true)
+
+      subcommand(CheerTest.TestParseServe)
+    end
+  end
+
+  describe "Cheer.parse/3" do
+    test "returns the matched command and args without invoking run/2" do
+      assert {:ok, CheerTest.TestParseServe, args} =
+               Cheer.parse(TestParseRoot, ["serve", "--transport", "stdio"])
+
+      assert args.transport == "stdio"
+      assert args.port == 4000
+    end
+
+    test "resolves a leaf command directly" do
+      assert {:ok, CheerTest.TestParseServe, %{port: 8080}} =
+               Cheer.parse(TestParseServe, ["--port", "8080"])
+    end
+
+    test "applies before_run and persistent_before_run hooks" do
+      assert {:ok, _, args} = Cheer.parse(TestParseRoot, ["serve"])
+      assert args.persistent_ran
+      assert args.before_run_ran
+    end
+
+    test "does not apply after_run hooks" do
+      assert {:ok, _, _} = Cheer.parse(TestParseRoot, ["serve"])
+      refute_received :after_run_ran
+    end
+
+    test "returns :handled for --help, after printing help" do
+      output = capture_io(fn -> assert Cheer.parse(TestParseRoot, ["--help"]) == :handled end)
+      assert output =~ "A server"
+    end
+
+    test "returns :handled for -h and for the help subcommand" do
+      capture_io(fn ->
+        assert Cheer.parse(TestParseRoot, ["-h"]) == :handled
+        assert Cheer.parse(TestParseRoot, ["help", "serve"]) == :handled
+      end)
+    end
+
+    test "returns :handled for --version, after printing the version" do
+      output = capture_io(fn -> assert Cheer.parse(TestParseRoot, ["--version"]) == :handled end)
+      assert output =~ "srv 9.9.9"
+    end
+
+    test "returns :handled for a bare parent command that prints help" do
+      output = capture_io(fn -> assert Cheer.parse(TestParseRoot, []) == :handled end)
+      assert output =~ "COMMANDS:"
+    end
+
+    test "returns {:error, :usage} for an unknown option" do
+      output =
+        capture_io(fn ->
+          assert Cheer.parse(TestParseRoot, ["serve", "--nope"]) == {:error, :usage}
+        end)
+
+      assert output =~ "error: unknown option(s): --nope"
+    end
+
+    test "returns {:error, :usage} for an unknown subcommand" do
+      output =
+        capture_io(fn -> assert Cheer.parse(TestParseRoot, ["nope"]) == {:error, :usage} end)
+
+      assert output =~ "error: unknown command 'nope'"
+    end
+
+    test "returns {:error, :usage} when validation fails" do
+      output =
+        capture_io(fn ->
+          assert Cheer.parse(TestParseServe, ["--transport", "carrier-pigeon"]) ==
+                   {:error, :usage}
+        end)
+
+      assert output =~ "--transport must be one of: http, stdio"
+    end
+
+    test "returns {:error, :usage} when a required subcommand is missing" do
+      output =
+        capture_io(fn -> assert Cheer.parse(TestParseRequired, []) == {:error, :usage} end)
+
+      assert output =~ "error: a subcommand is required"
+    end
+
+    test "uses :prog for usage lines like run/3 does" do
+      output = capture_io(fn -> Cheer.parse(TestParseRoot, ["--help"], prog: "myapp") end)
+      assert output =~ "myapp"
+    end
+
+    test "run/3 still reports help and version as :ok" do
+      capture_io(fn ->
+        assert Cheer.run(TestParseRoot, ["--help"]) == :ok
+        assert Cheer.run(TestParseRoot, ["-h"]) == :ok
+        assert Cheer.run(TestParseRoot, ["--version"]) == :ok
+        assert Cheer.run(TestParseRoot, ["help", "serve"]) == :ok
+        assert Cheer.run(TestParseRoot, []) == :ok
+      end)
+    end
+  end
 end
