@@ -51,7 +51,8 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
   flags
 - Optional subcommands (`:args_conflicts_with_subcommands`) and external
   subcommands for git-style plugin dispatchers
-- Escript and Mix task entry points (`Cheer.MixTask`)
+- Escript, Mix task (`Cheer.MixTask`), and long-running server entry points
+  (`Cheer.parse/3`, `Cheer.argv/0`)
 - Shell completion for bash, zsh, fish, and PowerShell
 - REPL mode driven by the same command tree
 - In-process test runner with output capture
@@ -87,7 +88,8 @@ Full docs on [hexdocs.pm/cheer](https://hexdocs.pm/cheer):
 - **Cookbook:**
   [Greeter](https://hexdocs.pm/cheer/greeter.html) (single command),
   [Devtool](https://hexdocs.pm/cheer/devtool.html) (nested subcommands with hooks and groups),
-  [Mix task](https://hexdocs.pm/cheer/mix_task.html) (drive a `mix` task with a command).
+  [Mix task](https://hexdocs.pm/cheer/mix_task.html) (drive a `mix` task with a command),
+  [Server](https://hexdocs.pm/cheer/server.html) (argv configures a supervision tree).
 
 ## Runnable examples
 
@@ -99,6 +101,8 @@ Standalone Mix projects that match the cookbook entries live under
   with lifecycle hooks and groups.
 - [`examples/mix_task/`](examples/mix_task/) -- a Cheer command driving a
   `mix` task.
+- [`examples/server/`](examples/server/) -- argv parsed in
+  `Application.start/2` to configure a supervision tree.
 
 ```sh
 cd examples/greeter && mix deps.get
