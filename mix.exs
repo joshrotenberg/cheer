@@ -81,6 +81,7 @@ defmodule Cheer.MixProject do
         "docs/cookbook/greeter.md",
         "docs/cookbook/devtool.md",
         "docs/cookbook/mix_task.md",
+        "docs/cookbook/server.md",
         "CHANGELOG.md"
       ],
       groups_for_extras: [
