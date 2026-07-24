@@ -54,12 +54,26 @@ defmodule Cheer do
 
   Use the `{:error, :usage}` result to set a nonzero exit code, or call
   `main/3` to have Cheer halt with a conventional code for you.
+
+  Pass `Cheer.argv/0` rather than `System.argv/0` if the app also ships as a
+  Burrito binary.
   """
   @spec run(module(), [String.t()], keyword()) :: term() | {:error, :usage}
   def run(root_command, argv, opts \\ []) do
     prog = Keyword.get(opts, :prog)
     Cheer.Router.dispatch(root_command, argv, prog: prog)
   end
+
+  @doc """
+  Run as an entry point with argv from `argv/0`, halting the VM.
+
+  Equivalent to `main(root_command, Cheer.argv(), [])`. Use this where the
+  runtime hands you no argv of its own, such as an `Application.start/2` in a
+  Burrito binary that exits when the command returns.
+  """
+  @dialyzer {:nowarn_function, [main: 1]}
+  @spec main(module()) :: no_return()
+  def main(root_command), do: main(root_command, argv(), [])
 
   @doc """
   Run as an escript entry point, halting the VM with a conventional exit code.
@@ -70,6 +84,11 @@ defmodule Cheer do
   custom codes should call `run/3` and halt itself.
 
       def main(argv), do: Cheer.main(MyApp.CLI, argv, prog: "myapp")
+
+  An escript is handed its argv, so pass it straight through. A Burrito binary
+  is not: use `main/1`, or pass `argv/0` explicitly to set `:prog`.
+
+      Cheer.main(MyApp.CLI, Cheer.argv(), prog: "myapp")
   """
   # main/2 and main/3 always System.halt, so they never return locally. That is
   # the intended behaviour for an escript entry point, not a defect.
@@ -88,6 +107,37 @@ defmodule Cheer do
   @spec exit_code(term()) :: 0 | 2
   def exit_code({:error, :usage}), do: 2
   def exit_code(_), do: 0
+
+  @doc """
+  Returns the command-line arguments, accounting for Burrito binaries.
+
+  A [Burrito](https://github.com/burrito-elixir/burrito)-wrapped binary does not
+  populate `System.argv/0`; its arguments arrive through
+  `Burrito.Util.Args.argv/0`. This returns whichever one is correct for the
+  current runtime, so a single entry point works under `mix run`, an escript,
+  and a Burrito binary.
+
+      Cheer.main(MyApp.CLI, Cheer.argv(), prog: "myapp")
+
+  The check is `Burrito.Util.running_standalone?/0`, not merely whether Burrito
+  is loaded, so `mix test` and `iex -S mix` in a project that ships via Burrito
+  still see their own argv.
+
+  Burrito is resolved at runtime rather than referenced at compile time, so
+  Cheer takes no dependency on it and this compiles clean in projects that do
+  not use it.
+  """
+  @spec argv() :: [String.t()]
+  def argv do
+    util = Module.concat(["Burrito", "Util"])
+
+    if Code.ensure_loaded?(util) and function_exported?(util, :running_standalone?, 0) and
+         util.running_standalone?() do
+      Module.concat(["Burrito", "Util", "Args"]).argv()
+    else
+      System.argv()
+    end
+  end
 
   @doc """
   Returns the command tree as a nested data structure.

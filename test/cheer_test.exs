@@ -1,3 +1,17 @@
+# Cheer.argv/0 resolves Burrito at runtime by name, so standing in for the real
+# modules is what exercises the standalone branch. The real
+# `running_standalone?/0` reports how the release was built; these read
+# application env so a test can drive both branches.
+defmodule Burrito.Util do
+  @moduledoc false
+  def running_standalone?, do: Application.get_env(:cheer, :test_burrito_standalone?, false)
+end
+
+defmodule Burrito.Util.Args do
+  @moduledoc false
+  def argv, do: Application.get_env(:cheer, :test_burrito_argv, [])
+end
+
 defmodule CheerTest do
   use ExUnit.Case
 
@@ -3333,6 +3347,22 @@ defmodule CheerTest do
   end
 
   # -- Release-audit coverage gaps (#113) --------------------------------------
+
+  describe "Cheer.argv/0 (#131)" do
+    test "falls back to System.argv/0 when not running as a standalone binary" do
+      assert Cheer.argv() == System.argv()
+    end
+
+    test "reads Burrito's argv when running as a standalone binary" do
+      Application.put_env(:cheer, :test_burrito_standalone?, true)
+      Application.put_env(:cheer, :test_burrito_argv, ["build", "--release"])
+
+      assert Cheer.argv() == ["build", "--release"]
+    after
+      Application.delete_env(:cheer, :test_burrito_standalone?)
+      Application.delete_env(:cheer, :test_burrito_argv)
+    end
+  end
 
   describe "Cheer.exit_code/1 (main exit-code mapping)" do
     test "maps a usage failure to 2 and anything else to 0" do
