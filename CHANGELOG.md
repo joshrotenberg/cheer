@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.1](https://github.com/joshrotenberg/cheer/compare/v0.2.0...v0.2.1) (2026-07-24)
+
+
+### Features
+
+* add Cheer.argv/0 for Burrito-aware argv ([#135](https://github.com/joshrotenberg/cheer/issues/135)) ([3e1800f](https://github.com/joshrotenberg/cheer/commit/3e1800f02d4f5d0b9ee321a6b73a2988f08588aa)), closes [#131](https://github.com/joshrotenberg/cheer/issues/131)
+* add Cheer.parse/3 to parse without dispatching ([#137](https://github.com/joshrotenberg/cheer/issues/137)) ([d66a325](https://github.com/joshrotenberg/cheer/commit/d66a3258cf08af4499e614354b6ca0f6863bcb58)), closes [#132](https://github.com/joshrotenberg/cheer/issues/132)
+* add parse_only to suppress the leaf run/2 requirement ([#142](https://github.com/joshrotenberg/cheer/issues/142)) ([ce20dd7](https://github.com/joshrotenberg/cheer/commit/ce20dd7bce41f6eaa2495e707c53fffc6626facb)), closes [#140](https://github.com/joshrotenberg/cheer/issues/140)
+* make Cheer.exit_code/1 public ([#138](https://github.com/joshrotenberg/cheer/issues/138)) ([9dfa6b0](https://github.com/joshrotenberg/cheer/commit/9dfa6b07aaa204d589723fa6ebdc2dc309848dc3)), closes [#134](https://github.com/joshrotenberg/cheer/issues/134)
+
 ## [0.2.0](https://github.com/joshrotenberg/cheer/compare/v0.1.5...v0.2.0) (2026-07-09)
 
 
