@@ -56,12 +56,61 @@ defmodule Cheer do
   `main/3` to have Cheer halt with a conventional code for you.
 
   Pass `Cheer.argv/0` rather than `System.argv/0` if the app also ships as a
-  Burrito binary.
+  Burrito binary. Use `parse/3` instead if argv configures a process that keeps
+  running rather than driving a unit of work.
   """
   @spec run(module(), [String.t()], keyword()) :: term() | {:error, :usage}
   def run(root_command, argv, opts \\ []) do
     prog = Keyword.get(opts, :prog)
     Cheer.Router.dispatch(root_command, argv, prog: prog)
+  end
+
+  @doc """
+  Parse argv and return the matched command without invoking its handler.
+
+  Everything `run/3` does up to the point of dispatch: subcommand resolution,
+  option parsing, defaults, env fallback, validation, and help output. The
+  matched command's `run/2` is not called.
+
+  Options:
+    * `:prog` - program name for usage lines (default: derived from root command name)
+
+  ## Return value
+
+    * `{:ok, command_module, args}` on a successful parse. `args` is the map
+      `run/2` would have received.
+    * `:handled` when Cheer printed help or a version and there is nothing left
+      to run.
+    * `{:error, :usage}` on a parse failure, error already printed.
+
+  `:handled` is distinct from `:ok` on purpose: a caller can tell "Cheer printed
+  help" from a handler that legitimately returned `:ok`.
+
+  Use this where argv configures something rather than driving a unit of work,
+  such as an `Application.start/2` that turns options into a supervision tree:
+
+      def start(_type, _args) do
+        case Cheer.parse(MyApp.CLI.Root, Cheer.argv(), prog: "myapp") do
+          {:ok, MyApp.CLI.Serve, args} ->
+            Supervisor.start_link(children(args), strategy: :one_for_one, name: MyApp.Supervisor)
+
+          :handled ->
+            System.halt(0)
+
+          {:error, :usage} ->
+            System.halt(2)
+        end
+      end
+
+  `before_run` and `persistent_before_run` hooks still run, since they shape the
+  args. `after_run` hooks do not: nothing ran, so there is no result to pass
+  them.
+  """
+  @spec parse(module(), [String.t()], keyword()) ::
+          {:ok, module(), map()} | :handled | {:error, :usage}
+  def parse(root_command, argv, opts \\ []) do
+    prog = Keyword.get(opts, :prog)
+    Cheer.Router.dispatch(root_command, argv, prog: prog, mode: :parse)
   end
 
   @doc """

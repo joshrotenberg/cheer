@@ -17,6 +17,8 @@ defmodule Cheer.Router do
   Options:
 
     * `:prog` - program name for help/usage output
+    * `:mode` - `:run` (default) invokes the matched command's `run/2`;
+      `:parse` stops after validation and returns `{:ok, command, args}`
     * `:parent_hooks` - (internal) accumulated persistent hooks from parent commands
   """
   @spec dispatch(module(), [String.t()], keyword()) :: term()
@@ -86,12 +88,15 @@ defmodule Cheer.Router do
 
       flag_requested?(argv, ["--help"]) ->
         Cheer.Help.print(command, Keyword.put(opts, :long, true))
+        printed(opts)
 
       flag_requested?(argv, ["-h"]) ->
         Cheer.Help.print(command, opts)
+        printed(opts)
 
       flag_requested?(argv, ["--version", "-V"]) ->
         print_version(meta)
+        printed(opts)
 
       match?(["help" | _], argv) ->
         resolve_help(command, tl(argv), opts)
@@ -101,8 +106,10 @@ defmodule Cheer.Router do
     end
   end
 
-  defp resolve_help(command, [], opts),
-    do: Cheer.Help.print(command, Keyword.put(opts, :long, true))
+  defp resolve_help(command, [], opts) do
+    Cheer.Help.print(command, Keyword.put(opts, :long, true))
+    printed(opts)
+  end
 
   defp resolve_help(command, [token | rest], opts) do
     meta = command.__cheer_meta__()
@@ -166,9 +173,11 @@ defmodule Cheer.Router do
 
       :none when meta.subcommands != [] and not external? ->
         Cheer.Help.print(command, opts)
+        printed(opts)
 
       :none when meta.subcommands != [] and argv == [] ->
         Cheer.Help.print(command, opts)
+        printed(opts)
 
       :none ->
         run_leaf(command, meta, argv, opts, hooks)
@@ -178,19 +187,31 @@ defmodule Cheer.Router do
   defp run_leaf(command, meta, argv, opts, hooks) do
     case parse_and_validate(command, meta, argv, opts) do
       {:ok, args} ->
-        # Apply persistent hooks from parents, then local before_run
+        # Apply persistent hooks from parents, then local before_run. These run
+        # in parse mode too: they shape the args, and parse mode's contract is
+        # the args `run/2` would have received. after_run hooks are skipped
+        # there, since nothing ran and there is no result to pass them.
         args = apply_hooks(args, hooks)
         args = apply_hooks(args, Map.get(meta, :before_run, []))
 
-        result = command.run(args, argv)
-
-        # Apply after_run hooks
-        apply_after_hooks(result, Map.get(meta, :after_run, []))
+        if parse_mode?(opts) do
+          {:ok, command, args}
+        else
+          result = command.run(args, argv)
+          apply_after_hooks(result, Map.get(meta, :after_run, []))
+        end
 
       :handled ->
         {:error, :usage}
     end
   end
+
+  defp parse_mode?(opts), do: Keyword.get(opts, :mode, :run) == :parse
+
+  # Result for the paths that print help or a version and stop. `Cheer.run/3`
+  # reports those as `:ok`; `Cheer.parse/3` needs them distinguishable from a
+  # handler that legitimately returns `:ok`, so parse mode reports `:handled`.
+  defp printed(opts), do: if(parse_mode?(opts), do: :handled, else: :ok)
 
   defp apply_hooks(args, []), do: args
 
