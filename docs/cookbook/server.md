@@ -54,6 +54,38 @@ running.
 command with its args, so the command tree describes the interface and the
 supervision tree consumes the result. `run/2` is never called.
 
+## The command has no handler
+
+A command resolved this way has nothing to dispatch to, so `parse_only()` says
+so and the compiler stops asking for a `run/2`:
+
+```elixir
+defmodule Server.CLI.Serve do
+  use Cheer.Command
+
+  command "serve" do
+    parse_only()
+
+    about "Start the server"
+
+    option :port, type: :integer, short: :p, default: 4000, help: "Port to listen on"
+    option :transport, type: :string, default: "http", choices: ["http", "stdio"],
+      help: "Transport to serve"
+  end
+end
+```
+
+Without it, a leaf command with no handler warns, which fails a build using
+`mix compile --warnings-as-errors` and forces exactly the stub this shape is
+meant to avoid. `Cheer.run/3` on a `parse_only` command raises and names
+`parse/3`, rather than dying on the missing callback.
+
+It is per command, not inherited: declare it on the leaves that have no handler.
+A tree with a mix of both is fine, and so is declaring it on a command that
+implements `run/2` anyway.
+
+## The `run/3` alternative
+
 `Cheer.run/3` also returns rather than halting, so it works too. The cost is
 that the leaf handler becomes a stub whose only job is to smuggle the parsed
 options back out through its return value:
@@ -180,6 +212,8 @@ mix run -- serve --transport carrier-pigeon
 
 - **`Cheer.parse/3`** -- resolution and validation without dispatch, so argv can
   configure a supervision tree.
+- **`parse_only()`** -- the leaf declares that it has no handler, so no stub
+  `run/2` and no compiler warning.
 - **`Cheer.argv/0`** -- the right argv under `mix run`, an escript, and a
   Burrito binary.
 - **`:handled`** -- help and version reported distinctly from a handler that

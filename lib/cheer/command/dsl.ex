@@ -68,6 +68,31 @@ defmodule Cheer.Command.DSL do
   @doc "Require that a subcommand is provided (error instead of showing help)."
   defmacro subcommand_required(val), do: quote(do: @cheer_subcommand_required(unquote(val)))
 
+  @doc """
+  Declare that this command is resolved with `Cheer.parse/3` and has no `run/2`.
+
+  A leaf command normally has to implement `run/2`, and the compiler warns when
+  it does not, because dispatch would reach a dead end. A tree consumed through
+  `Cheer.parse/3` never dispatches: argv is resolved and validated, and the
+  caller decides what to do with the args. This declares that intent, so the
+  leaf check stays out of the way.
+
+      command "myapp" do
+        parse_only()
+
+        about "A server configured from argv"
+        option :transport, type: :string, choices: ["stdio", "http"]
+      end
+
+  `Cheer.run/3` on a command declared this way raises, pointing at `parse/3`,
+  rather than failing on the missing callback.
+
+  It is a per-command declaration, not inherited: the leaf without a handler is
+  the one that declares it. Declaring it on a command that implements `run/2`
+  anyway changes nothing, and that command still dispatches.
+  """
+  defmacro parse_only(val \\ true), do: quote(do: @cheer_parse_only(unquote(val)))
+
   @doc "Propagate this command's version to all subcommands."
   defmacro propagate_version(val), do: quote(do: @cheer_propagate_version(unquote(val)))
 

@@ -2,15 +2,16 @@ defmodule Server.CLI.Serve do
   @moduledoc """
   The command that configures the supervision tree.
 
-  `run/2` is never called: `Server.Application` uses `Cheer.parse/3`, which
-  stops after validation and hands back the args. The callback is still part of
-  the `Cheer.Command` behaviour, so it stays here for anything that dispatches
-  this tree with `Cheer.run/3` instead, such as a test.
+  `parse_only()` says this command is resolved with `Cheer.parse/3` and never
+  dispatched, so there is no `run/2` here and the compiler does not ask for one.
+  `Server.Application` decides what to do with the args.
   """
 
   use Cheer.Command
 
   command "serve" do
+    parse_only()
+
     about "Start the server"
 
     option :port,
@@ -27,7 +28,4 @@ defmodule Server.CLI.Serve do
       choices: ["http", "stdio"],
       help: "Transport to serve"
   end
-
-  @impl Cheer.Command
-  def run(args, _raw), do: {:serve, args}
 end

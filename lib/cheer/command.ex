@@ -47,6 +47,7 @@ defmodule Cheer.Command do
       Module.register_attribute(__MODULE__, :cheer_hide, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_deprecated, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_subcommand_required, accumulate: false)
+      Module.register_attribute(__MODULE__, :cheer_parse_only, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_propagate_version, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_infer_subcommands, accumulate: false)
       Module.register_attribute(__MODULE__, :cheer_external_subcommands, accumulate: false)

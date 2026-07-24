@@ -197,12 +197,32 @@ defmodule Cheer.Router do
         if parse_mode?(opts) do
           {:ok, command, args}
         else
-          result = command.run(args, argv)
+          result = invoke_run(command, meta, args, argv)
           apply_after_hooks(result, Map.get(meta, :after_run, []))
         end
 
       :handled ->
         {:error, :usage}
+    end
+  end
+
+  # A leaf with no run/2 cannot be dispatched. A command declared parse_only has
+  # none on purpose, so name the entry point that does work rather than raising
+  # UndefinedFunctionError from inside the router.
+  defp invoke_run(command, meta, args, argv) do
+    cond do
+      function_exported?(command, :run, 2) ->
+        command.run(args, argv)
+
+      Map.get(meta, :parse_only, false) ->
+        raise ArgumentError,
+              "#{inspect(command)} is declared parse_only and implements no run/2. " <>
+                "Resolve this command tree with Cheer.parse/3 rather than Cheer.run/3."
+
+      true ->
+        raise ArgumentError,
+              "#{inspect(command)} is a leaf command but implements no run/2. " <>
+                "Implement it, or declare parse_only() and resolve the tree with Cheer.parse/3."
     end
   end
 
