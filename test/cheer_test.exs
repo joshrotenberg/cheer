@@ -3371,6 +3371,15 @@ defmodule CheerTest do
       assert Cheer.exit_code({:ok, %{}}) == 0
       assert Cheer.exit_code("some run/2 result") == 0
     end
+
+    test "maps a parse/3 result too" do
+      capture_io(fn ->
+        assert CheerTest.TestParseRoot |> Cheer.parse(["--help"]) |> Cheer.exit_code() == 0
+        assert CheerTest.TestParseRoot |> Cheer.parse(["nope"]) |> Cheer.exit_code() == 2
+      end)
+
+      assert CheerTest.TestParseRoot |> Cheer.parse(["serve"]) |> Cheer.exit_code() == 0
+    end
   end
 
   describe "env :count coercion edge cases (#113)" do

@@ -130,7 +130,8 @@ defmodule Cheer do
   Dispatches `argv` like `run/3`, then halts the VM: `0` on success (including
   `--help` and `--version`) and `2` on a usage failure. The command's own
   `run/2` return value does not affect the exit code; a command that wants
-  custom codes should call `run/3` and halt itself.
+  custom codes should call `run/3` and halt itself, mapping the results it does
+  not special-case with `exit_code/1`.
 
       def main(argv), do: Cheer.main(MyApp.CLI, argv, prog: "myapp")
 
@@ -150,9 +151,20 @@ defmodule Cheer do
     |> System.halt()
   end
 
-  @doc false
-  # Maps a `run/3` result to a conventional process exit code: 2 on a usage
-  # failure, 0 otherwise. Pure and testable, unlike `main/3` which halts.
+  @doc """
+  Map a `run/3` or `parse/3` result to a conventional process exit code.
+
+  Returns `2` for `{:error, :usage}` and `0` for anything else, which is the
+  mapping `main/3` applies. Call it directly when a command wants exit codes of
+  its own and so has to halt itself, rather than restating the convention:
+
+      case Cheer.run(MyApp.CLI, argv, prog: "myapp") do
+        {:error, :not_found} -> System.halt(4)
+        other -> System.halt(exit_code(other))
+      end
+
+  Pure, unlike `main/3`, which halts.
+  """
   @spec exit_code(term()) :: 0 | 2
   def exit_code({:error, :usage}), do: 2
   def exit_code(_), do: 0
