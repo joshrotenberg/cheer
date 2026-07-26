@@ -375,6 +375,45 @@ defmodule CheerTest do
     end
   end
 
+  # -- Description column alignment (#143) -------------------------------------
+
+  defmodule TestAlignedHelp do
+    use Cheer.Command
+
+    command "aligned" do
+      about("Alignment fixture")
+      version("1.0.0")
+
+      option(:transport, type: :string, short: :t, help: "Transport to serve on")
+      option(:port, type: :integer, short: :p, help: "Port for the http transport")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  describe "option description alignment" do
+    test "built-in flags share the description column with declared options" do
+      output = capture_io(fn -> Cheer.run(TestAlignedHelp, ["--help"]) end)
+      lines = String.split(output, "\n")
+
+      columns =
+        for desc <- [
+              "Transport to serve on",
+              "Port for the http transport",
+              "Print help",
+              "Print version"
+            ] do
+          line = Enum.find(lines, &String.contains?(&1, desc))
+          assert line, "no help line describing #{inspect(desc)}"
+          {column, _len} = :binary.match(line, desc)
+          {desc, column}
+        end
+
+      assert Enum.uniq(Enum.map(columns, &elem(&1, 1))) == [25], "misaligned: #{inspect(columns)}"
+    end
+  end
+
   # -- Help subcommand ---------------------------------------------------------
 
   describe "help subcommand" do

@@ -11,6 +11,11 @@ defmodule Cheer.Help do
   extended version while `-h` displays the short version.
   """
 
+  # Width of the long-flag column (everything after `--`). Declared options and
+  # the built-in flags both pad to this, so every description in `OPTIONS:`
+  # starts in the same column.
+  @flag_col_width 16
+
   @doc """
   Print formatted help for a command to stdout.
 
@@ -163,10 +168,10 @@ defmodule Cheer.Help do
       IO.puts("")
     end
 
-    IO.puts("  -h, --help              Print help")
+    IO.puts(format_builtin("h", "help", "Print help"))
 
     if meta[:version] do
-      IO.puts("  -V, --version           Print version")
+      IO.puts(format_builtin("V", "version", "Print version"))
     end
 
     if meta[:after_help] do
@@ -355,9 +360,20 @@ defmodule Cheer.Help do
 
     suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
 
-    flag_col = Cheer.Ansi.paint("--#{String.pad_trailing(flag_name <> value_suffix, 16)}", :cyan)
+    flag_col =
+      Cheer.Ansi.paint(
+        "--#{String.pad_trailing(flag_name <> value_suffix, @flag_col_width)}",
+        :cyan
+      )
 
     wrap_line("  #{short}#{flag_col} ", "#{help}#{suffix}")
+  end
+
+  # The built-in flags are not declared options, so they render here rather than
+  # through `format_option/2`. Same column math, so both blocks in `OPTIONS:`
+  # share one description column (#143).
+  defp format_builtin(short, flag, help) do
+    "  -#{short}, --#{String.pad_trailing(flag, @flag_col_width)} #{help}"
   end
 
   # Render an option name as the long flag the parser accepts.
