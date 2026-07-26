@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/joshrotenberg/cheer/compare/v0.2.1...v0.2.2) (2026-07-26)
+
+
+### Bug Fixes
+
+* align built-in --help/--version with declared options in help output ([#144](https://github.com/joshrotenberg/cheer/issues/144)) ([de4e930](https://github.com/joshrotenberg/cheer/commit/de4e930bcabf2f34b75a9d34890ceb27577fdfa5)), closes [#143](https://github.com/joshrotenberg/cheer/issues/143)
+
 ## [0.2.1](https://github.com/joshrotenberg/cheer/compare/v0.2.0...v0.2.1) (2026-07-24)
 
 
