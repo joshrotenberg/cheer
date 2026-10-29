@@ -183,6 +183,11 @@ An option without `global: true` belongs only to the command that declares it.
 It is not in a subcommand's `args`, so reading it there with `args.verbose`
 raises `KeyError`. See [Subcommands](subcommands.md#sharing-options-across-the-tree).
 
+Arguments, options, and the trailing var arg of a command share one `args`
+map, so each name can be used once. A repeated name is a compile-time warning,
+and a subcommand argument named like an inherited global raises `ArgumentError`
+when dispatched.
+
 ## Hiding options
 
 ```elixir

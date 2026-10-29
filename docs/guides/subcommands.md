@@ -65,6 +65,11 @@ end
 ```
 
 Without `global: true`, `args` in `Devtool.Server.Start` has no `:config` key.
+
+A global option and a subcommand's argument cannot share a name, since both
+would write the same key in `args`. Dispatching to such a subcommand raises
+`ArgumentError`. A subcommand can still redeclare the global as its own option
+to override it.
 See [Global options](options.md#global-options).
 
 ## Require a subcommand
