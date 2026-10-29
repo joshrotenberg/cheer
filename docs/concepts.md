@@ -94,6 +94,6 @@ testing.
 
 ## Test runner
 
-`Cheer.Test.run/3` invokes a command in-process, captures stdout, and returns
-both the output and the handler's return value. No subprocess, no argv
+`Cheer.Test.run/3` invokes a command in-process, captures stdout and stderr
+separately, and returns both along with the handler's return value. No subprocess, no argv
 escaping. See [Testing](guides/testing.md).
