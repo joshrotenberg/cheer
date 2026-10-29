@@ -31,7 +31,7 @@ jobs:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             deps
@@ -58,14 +58,14 @@ jobs:
           elixir-version: "1.19"
           otp-version: "28"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             deps
             _build
           key: ${{ runner.os }}-mix-1.19-28-${{ hashFiles('mix.lock') }}
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: _build/dev/dialyxir_*.plt
           key: ${{ runner.os }}-plt-1.19-28-${{ hashFiles('mix.lock') }}
