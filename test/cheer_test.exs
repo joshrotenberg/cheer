@@ -1975,6 +1975,82 @@ defmodule CheerTest do
       output = capture_io(fn -> Cheer.run(TestGlobalRoot, ["deploy", "--help"]) end)
       assert output =~ "verbose"
     end
+
+    test "global boolean before the subcommand name" do
+      assert {:ok, %{verbose: true, target: "prod"}} =
+               Cheer.run(TestGlobalRoot, ["--verbose", "deploy", "--target", "prod"])
+    end
+
+    test "negated global boolean before the subcommand name" do
+      assert {:ok, %{verbose: false, target: "prod"}} =
+               Cheer.run(TestGlobalRoot, ["--no-verbose", "deploy", "--target", "prod"])
+    end
+
+    test "global short flag before the subcommand name" do
+      assert {:ok, %{verbose: true, target: "prod"}} =
+               Cheer.run(TestGlobalRoot, ["-v", "deploy", "--target", "prod"])
+    end
+
+    test "global option with a separate value before the subcommand name" do
+      assert {:ok, %{config: "custom.toml", target: "prod"}} =
+               Cheer.run(TestGlobalRoot, ["--config", "custom.toml", "deploy", "--target", "prod"])
+    end
+
+    test "global option with an inline value before the subcommand name" do
+      assert {:ok, %{config: "custom.toml", target: "prod"}} =
+               Cheer.run(TestGlobalRoot, ["--config=custom.toml", "deploy", "--target", "prod"])
+    end
+
+    test "help for the subcommand when globals precede it" do
+      output = capture_io(fn -> Cheer.run(TestGlobalRoot, ["-v", "deploy", "--help"]) end)
+      assert output =~ "--target"
+    end
+
+    test "global option before a nested subcommand" do
+      assert {:ok, %{verbose: true, target: "prod"}} =
+               Cheer.run(CheerTest.TestGlobalNestedRoot, [
+                 "-v",
+                 "ops",
+                 "deploy",
+                 "--target",
+                 "prod"
+               ])
+    end
+
+    test "global option before a branch and before the leaf" do
+      assert {:ok, %{verbose: true, config: "custom.toml", target: "prod"}} =
+               Cheer.run(CheerTest.TestGlobalNestedRoot, [
+                 "--config",
+                 "custom.toml",
+                 "ops",
+                 "-v",
+                 "deploy",
+                 "--target",
+                 "prod"
+               ])
+    end
+  end
+
+  defmodule TestGlobalNestedOps do
+    use Cheer.Command
+
+    command "ops" do
+      about("Operations")
+      subcommand(CheerTest.TestGlobalChild)
+    end
+  end
+
+  defmodule TestGlobalNestedRoot do
+    use Cheer.Command
+
+    command "app" do
+      about("App with nested subcommands")
+
+      option(:verbose, type: :boolean, short: :v, global: true, help: "Verbose output")
+      option(:config, type: :string, global: true, default: "config.toml", help: "Config file")
+
+      subcommand(CheerTest.TestGlobalNestedOps)
+    end
   end
 
   # -- subcommand_required (#21) -----------------------------------------------

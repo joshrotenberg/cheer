@@ -61,6 +61,7 @@ defmodule Cheer.Router do
 
     accumulated_globals = parent_globals ++ global_opts
     opts = Keyword.put(opts, :parent_globals, accumulated_globals)
+    argv = hoist_leading_globals(argv, meta, accumulated_globals)
 
     # Accumulate persistent hooks from this command
     hooks = parent_hooks ++ Map.get(meta, :persistent_before_run, [])
@@ -1226,6 +1227,78 @@ defmodule Cheer.Router do
 
   defp flag_string(name) when is_atom(name),
     do: name |> Atom.to_string() |> String.replace("_", "-")
+
+  # -- Globals before the subcommand name (#151) --
+
+  # Move global options that precede the subcommand name to just after it, so
+  # `tool -v sub` parses like `tool sub -v`: the child already parses inherited
+  # globals as its own options. Argv is unchanged unless a subcommand follows.
+  defp hoist_leading_globals(argv, _meta, []), do: argv
+  defp hoist_leading_globals(argv, %{subcommands: []}, _globals), do: argv
+
+  defp hoist_leading_globals(argv, meta, globals) do
+    infer? = Map.get(meta, :infer_subcommands, false)
+
+    case take_leading_globals(argv, global_flag_lookup(globals), []) do
+      {[_ | _] = taken, [token | rest]} ->
+        case match_subcommand(meta.subcommands, [token], infer?) do
+          {:ok, _, _} -> [token | taken ++ rest]
+          {:ambiguous, _, _} -> [token | taken ++ rest]
+          _ -> argv
+        end
+
+      _ ->
+        argv
+    end
+  end
+
+  defp take_leading_globals([], _lookup, taken), do: {Enum.reverse(taken), []}
+
+  defp take_leading_globals([token | rest] = argv, lookup, taken) do
+    {flag, inline?} =
+      case String.split(token, "=", parts: 2) do
+        [flag, _value] -> {flag, true}
+        [flag] -> {flag, false}
+      end
+
+    case {Map.get(lookup, flag), inline?, rest} do
+      {nil, _, _} ->
+        {Enum.reverse(taken), argv}
+
+      {:flag, _, _} ->
+        take_leading_globals(rest, lookup, [token | taken])
+
+      {:value, true, _} ->
+        take_leading_globals(rest, lookup, [token | taken])
+
+      {:value, false, [value | rest]} ->
+        take_leading_globals(rest, lookup, [value, token | taken])
+
+      {:value, false, []} ->
+        {Enum.reverse(taken), argv}
+    end
+  end
+
+  # Maps each spelling of a global option to whether it takes a value.
+  defp global_flag_lookup(globals) do
+    Enum.flat_map(globals, fn {name, opts} ->
+      flagish? = Keyword.get(opts, :type, :string) in [:boolean, :count]
+      kind = if flagish?, do: :flag, else: :value
+      negated = if flagish?, do: ["--no-#{flag_string(name)}"], else: []
+
+      short =
+        case Keyword.get(opts, :short) do
+          nil -> []
+          s -> ["-#{s}"]
+        end
+
+      aliases = Enum.map(Keyword.get(opts, :aliases, []), &"--#{flag_string(&1)}")
+
+      for spelling <- ["--#{flag_string(name)}" | negated ++ short ++ aliases],
+          do: {spelling, kind}
+    end)
+    |> Map.new()
+  end
 
   # -- OptionParser spec --
 
