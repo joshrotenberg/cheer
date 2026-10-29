@@ -61,11 +61,17 @@ defmodule Cheer.Router do
 
     accumulated_globals = parent_globals ++ global_opts
     opts = Keyword.put(opts, :parent_globals, accumulated_globals)
-    argv = hoist_leading_globals(argv, meta, accumulated_globals)
 
     # Accumulate persistent hooks from this command
     hooks = parent_hooks ++ Map.get(meta, :persistent_before_run, [])
 
+    case hoist_leading_options(command, meta, argv, accumulated_globals, opts) do
+      {:ok, argv} -> route(command, meta, argv, opts, hooks)
+      error -> error
+    end
+  end
+
+  defp route(command, meta, argv, opts, hooks) do
     # If the first token matches a subcommand, dispatch to it before checking
     # flags. This ensures `tool sub --help` shows the subcommand's help.
     infer? = Map.get(meta, :infer_subcommands, false)
@@ -161,7 +167,12 @@ defmodule Cheer.Router do
         print_unknown_command(meta, unknown_token)
         {:error, :usage}
 
-      :none when meta.subcommands != [] and meta.subcommand_required ->
+      # Options given but no subcommand named: a usage error unless the parent
+      # can take them itself. Bare invocation (empty argv) still prints help.
+      :none
+      when meta.subcommands != [] and
+             (meta.subcommand_required or
+                (argv != [] and not external? and not args_conflict?)) ->
         IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} a subcommand is required")
         IO.puts(:stderr, "")
         Cheer.Help.print(command, Keyword.put(opts, :device, :stderr))
@@ -1228,76 +1239,105 @@ defmodule Cheer.Router do
   defp flag_string(name) when is_atom(name),
     do: name |> Atom.to_string() |> String.replace("_", "-")
 
-  # -- Globals before the subcommand name (#151) --
+  # -- Options before the subcommand name (#151, #160) --
 
-  # Move global options that precede the subcommand name to just after it, so
-  # `tool -v sub` parses like `tool sub -v`: the child already parses inherited
-  # globals as its own options. Argv is unchanged unless a subcommand follows.
-  defp hoist_leading_globals(argv, _meta, []), do: argv
-  defp hoist_leading_globals(argv, %{subcommands: []}, _globals), do: argv
+  # Options ahead of the subcommand name are parsed with this command's spec.
+  # Globals move to just after the subcommand name, where the child parses them
+  # as inherited options. Unknown options and this command's own options are
+  # usage errors: the parent does not run once a subcommand dispatches. Argv is
+  # unchanged unless a subcommand follows the options.
+  defp hoist_leading_options(_command, %{subcommands: []}, argv, _globals, _opts),
+    do: {:ok, argv}
 
-  defp hoist_leading_globals(argv, meta, globals) do
-    infer? = Map.get(meta, :infer_subcommands, false)
+  defp hoist_leading_options(command, meta, argv, globals, opts) do
+    all_options =
+      meta.options ++
+        Enum.reject(globals, fn {name, _} -> List.keymember?(meta.options, name, 0) end)
 
-    case take_leading_globals(argv, global_flag_lookup(globals), []) do
-      {[_ | _] = taken, [token | rest]} ->
-        case match_subcommand(meta.subcommands, [token], infer?) do
-          {:ok, _, _} -> [token | taken ++ rest]
-          {:ambiguous, _, _} -> [token | taken ++ rest]
-          _ -> argv
+    {spec, aliases} = leading_option_spec(all_options)
+    {parsed, rest, invalid} = OptionParser.parse_head(argv, strict: spec, aliases: aliases)
+    leading = Enum.take(argv, length(argv) - length(rest))
+
+    # An unknown option may or may not take a value, so the tokens after it
+    # cannot be trusted. Like clap, reject it rather than guess. Commands that
+    # accept unknown tokens themselves keep their own handling.
+    loose? =
+      Map.get(meta, :external_subcommands, false) or
+        Map.get(meta, :args_conflicts_with_subcommands, false)
+
+    cond do
+      leading == [] ->
+        {:ok, argv}
+
+      invalid != [] and not loose? ->
+        print_invalid_options_error(command, invalid, opts, all_options)
+        {:error, :usage}
+
+      invalid == [] and match?([_ | _], rest) and subcommand_token?(meta, hd(rest)) ->
+        [token | after_token] = rest
+
+        case local_options_used(meta, parsed) do
+          [] ->
+            {:ok, [token | leading ++ after_token]}
+
+          local ->
+            print_local_options_error(command, meta, local, token, opts)
+            {:error, :usage}
         end
 
-      _ ->
-        argv
+      true ->
+        {:ok, argv}
     end
   end
 
-  defp take_leading_globals([], _lookup, taken), do: {Enum.reverse(taken), []}
+  # The command's option spec plus the built-in help and version flags, so a
+  # leading `--help` or `-V` is not taken for an unknown option.
+  defp leading_option_spec(all_options) do
+    {spec, aliases} = build_option_parser_spec(all_options)
 
-  defp take_leading_globals([token | rest] = argv, lookup, taken) do
-    {flag, inline?} =
-      case String.split(token, "=", parts: 2) do
-        [flag, _value] -> {flag, true}
-        [flag] -> {flag, false}
-      end
+    builtins =
+      Enum.reject([help: :boolean, version: :boolean], fn {name, _} ->
+        Keyword.has_key?(spec, name)
+      end)
 
-    case {Map.get(lookup, flag), inline?, rest} do
-      {nil, _, _} ->
-        {Enum.reverse(taken), argv}
+    builtin_aliases =
+      Enum.reject([h: :help, V: :version], fn {short, _} -> Keyword.has_key?(aliases, short) end)
 
-      {:flag, _, _} ->
-        take_leading_globals(rest, lookup, [token | taken])
+    {spec ++ builtins, aliases ++ builtin_aliases}
+  end
 
-      {:value, true, _} ->
-        take_leading_globals(rest, lookup, [token | taken])
-
-      {:value, false, [value | rest]} ->
-        take_leading_globals(rest, lookup, [value, token | taken])
-
-      {:value, false, []} ->
-        {Enum.reverse(taken), argv}
+  defp subcommand_token?(meta, token) do
+    case match_subcommand(meta.subcommands, [token], Map.get(meta, :infer_subcommands, false)) do
+      {:ok, _, _} -> true
+      {:ambiguous, _, _} -> true
+      _ -> false
     end
   end
 
-  # Maps each spelling of a global option to whether it takes a value.
-  defp global_flag_lookup(globals) do
-    Enum.flat_map(globals, fn {name, opts} ->
-      flagish? = Keyword.get(opts, :type, :string) in [:boolean, :count]
-      kind = if flagish?, do: :flag, else: :value
-      negated = if flagish?, do: ["--no-#{flag_string(name)}"], else: []
+  # Names (or long aliases) in `parsed` that belong to this command's own,
+  # non-global options.
+  defp local_options_used(meta, parsed) do
+    local =
+      for {name, o} <- meta.options,
+          !Keyword.get(o, :global, false),
+          key <- [name | Keyword.get(o, :aliases, [])],
+          into: MapSet.new(),
+          do: key
 
-      short =
-        case Keyword.get(opts, :short) do
-          nil -> []
-          s -> ["-#{s}"]
-        end
+    for {key, _} <- parsed, key in local, uniq: true, do: key
+  end
 
-      aliases = Enum.map(Keyword.get(opts, :aliases, []), &"--#{flag_string(&1)}")
+  defp print_local_options_error(command, meta, keys, token, opts) do
+    flags = Enum.map_join(keys, ", ", &"--#{flag_string(&1)}")
 
-      for spelling <- ["--#{flag_string(name)}" | negated ++ short ++ aliases],
-          do: {spelling, kind}
-    end)
-    |> Map.new()
+    IO.puts(
+      :stderr,
+      "#{Cheer.Ansi.paint("error:", :red)} #{flags} belongs to '#{meta.name}' " <>
+        "and does not apply to subcommand '#{token}'"
+    )
+
+    IO.puts(:stderr, "")
+    Cheer.Help.print(command, Keyword.put(opts, :device, :stderr))
   end
 
   # -- OptionParser spec --
