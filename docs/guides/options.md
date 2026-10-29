@@ -33,6 +33,27 @@ option :port, type: :integer, default: 4000, env: "PORT"
 
 Priority: CLI flag > `PORT` env var > default.
 
+A `:default` is evaluated when the command module compiles, not when the CLI
+runs. For an escript or a Burrito binary, that fixes the value on the build
+machine:
+
+```elixir
+# Bakes the builder's home directory into the binary and its help text.
+option :file, type: :string, default: Path.expand("~/.myapp.json")
+```
+
+For a value that depends on the user's machine, omit `:default` and resolve it
+in `run/2`:
+
+```elixir
+option :file, type: :string, env: "MYAPP_FILE", help: "Data file [default: ~/.myapp.json]"
+
+def run(args, _raw) do
+  file = args[:file] || Path.expand("~/.myapp.json")
+  # ...
+end
+```
+
 ## Choices
 
 ```elixir
@@ -153,7 +174,14 @@ Propagate an option to every subcommand:
 option :verbose, type: :boolean, global: true
 ```
 
-Children inherit the option spec but can override by redeclaring.
+Children inherit the option spec but can override by redeclaring. Each
+subcommand's help lists inherited options marked `(global)`, and they are
+accepted before or after the subcommand name: `myapp --verbose deploy` and
+`myapp deploy --verbose` parse the same.
+
+An option without `global: true` belongs only to the command that declares it.
+It is not in a subcommand's `args`, so reading it there with `args.verbose`
+raises `KeyError`. See [Subcommands](subcommands.md#sharing-options-across-the-tree).
 
 ## Hiding options
 
