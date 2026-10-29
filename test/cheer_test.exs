@@ -2060,6 +2060,7 @@ defmodule CheerTest do
 
     command "app" do
       about("App with several global option types")
+      version("9.9.9")
 
       option(:verbose, type: :boolean, short: :v, global: true, help: "Verbose output")
       option(:quiet, type: :boolean, short: :q, global: true, help: "Quiet output")
@@ -2114,6 +2115,28 @@ defmodule CheerTest do
         end)
 
       assert output =~ "error:"
+    end
+
+    test "unknown option with no subcommand is a usage error" do
+      output =
+        capture_io(fn ->
+          assert {:error, :usage} = Cheer.run(TestLeadingOptsRoot, ["--bogus"])
+        end)
+
+      assert output =~ "unknown option(s): --bogus"
+    end
+
+    test "help and version flags still work at the root" do
+      for argv <- [["--help"], ["-h"], ["-v", "--help"]] do
+        output = capture_io(fn -> assert :ok = Cheer.run(TestLeadingOptsRoot, argv) end)
+        assert output =~ "Usage: app", "help for #{inspect(argv)}"
+        refute output =~ "error:", "no error for #{inspect(argv)}"
+      end
+
+      for argv <- [["-V"], ["--version"], ["-v", "-V"]] do
+        output = capture_io(fn -> assert :ok = Cheer.run(TestLeadingOptsRoot, argv) end)
+        assert output =~ "9.9.9", "version for #{inspect(argv)}"
+      end
     end
 
     test "empty argv still prints help with no error" do
