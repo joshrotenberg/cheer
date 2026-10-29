@@ -62,11 +62,13 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
 
 ## Install
 
+<!-- x-release-please-start-version -->
 ```elixir
 def deps do
-  [{:cheer, "~> 0.1"}]
+  [{:cheer, "~> 0.2.2"}]
 end
 ```
+<!-- x-release-please-end -->
 
 ## Documentation
 
