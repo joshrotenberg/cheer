@@ -1981,6 +1981,11 @@ defmodule CheerTest do
                Cheer.run(TestGlobalRoot, ["--verbose", "deploy", "--target", "prod"])
     end
 
+    test "negated global boolean before the subcommand name" do
+      assert {:ok, %{verbose: false, target: "prod"}} =
+               Cheer.run(TestGlobalRoot, ["--no-verbose", "deploy", "--target", "prod"])
+    end
+
     test "global short flag before the subcommand name" do
       assert {:ok, %{verbose: true, target: "prod"}} =
                Cheer.run(TestGlobalRoot, ["-v", "deploy", "--target", "prod"])
