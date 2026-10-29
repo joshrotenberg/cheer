@@ -32,6 +32,41 @@ end
 Each subcommand is a full command module with its own options, arguments,
 help, and optional children.
 
+## Sharing options across the tree
+
+Options are scoped to the command that declares them. To make a parent's
+option available to every descendant, declare it `global: true`:
+
+```elixir
+defmodule Devtool.CLI do
+  use Cheer.Command
+
+  command "devtool" do
+    option :config, type: :string, short: :c, global: true, help: "Config file"
+
+    subcommand Devtool.Server
+  end
+end
+
+defmodule Devtool.Server.Start do
+  use Cheer.Command
+
+  command "start" do
+    about "Start the dev server"
+  end
+
+  @impl Cheer.Command
+  def run(args, _raw) do
+    # Present for `devtool -c dev.toml server start` and
+    # `devtool server start -c dev.toml`.
+    IO.inspect(args[:config])
+  end
+end
+```
+
+Without `global: true`, `args` in `Devtool.Server.Start` has no `:config` key.
+See [Global options](options.md#global-options).
+
 ## Require a subcommand
 
 By default, invoking a parent command with no child shows help. To treat

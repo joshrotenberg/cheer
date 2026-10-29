@@ -77,6 +77,10 @@ mix escript.build
 ./greeter world --loud --times 3
 ```
 
+Option defaults are evaluated at compile time, so a default computed from the
+build machine (a home directory, the current date) is fixed in the escript.
+See [Defaults and env var fallback](../guides/options.md#defaults-and-env-var-fallback).
+
 ## What it shows
 
 - **Required positional** -- `argument :name, required: true` with the
