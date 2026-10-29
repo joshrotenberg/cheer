@@ -28,27 +28,29 @@ defmodule Cheer.Help do
     meta = command.__cheer_meta__()
     prog = Keyword.get(opts, :prog) || meta.name
     long = Keyword.get(opts, :long, false)
+    # :stderr when help follows a usage error, so it stays off stdout.
+    device = Keyword.get(opts, :device, :stdio)
 
     if meta[:before_help] do
-      IO.puts(meta.before_help)
-      IO.puts("")
+      IO.puts(device, meta.before_help)
+      IO.puts(device, "")
     end
 
-    IO.puts("")
+    IO.puts(device, "")
 
     if meta[:usage] do
-      IO.puts(Cheer.Ansi.paint("Usage:", :bright) <> " #{meta.usage}")
+      IO.puts(device, Cheer.Ansi.paint("Usage:", :bright) <> " #{meta.usage}")
     else
-      IO.puts(format_usage(meta, prog))
+      IO.puts(device, format_usage(meta, prog))
     end
 
-    IO.puts("")
+    IO.puts(device, "")
 
     about_text = if long, do: meta[:long_about] || meta.about, else: meta.about
 
     if about_text && about_text != "" do
-      IO.puts(about_text)
-      IO.puts("")
+      IO.puts(device, about_text)
+      IO.puts(device, "")
     end
 
     visible_subcommands =
@@ -60,7 +62,7 @@ defmodule Cheer.Help do
       |> sort_subcommands()
 
     if visible_subcommands != [] do
-      IO.puts(Cheer.Ansi.paint("COMMANDS:", :bright))
+      IO.puts(device, Cheer.Ansi.paint("COMMANDS:", :bright))
 
       for sub <- visible_subcommands do
         sub_meta = sub.__cheer_meta__()
@@ -70,11 +72,12 @@ defmodule Cheer.Help do
         dep = if dep != "", do: " " <> dep, else: ""
 
         IO.puts(
+          device,
           "  #{String.pad_trailing(sub_meta.name <> alias_str, 20)} #{sub_meta.about}#{dep}"
         )
       end
 
-      IO.puts("")
+      IO.puts(device, "")
     end
 
     visible_arguments =
@@ -87,7 +90,7 @@ defmodule Cheer.Help do
     has_trailing = meta[:trailing_var_arg] != nil
 
     if visible_arguments != [] or has_trailing do
-      IO.puts(Cheer.Ansi.paint("ARGUMENTS:", :bright))
+      IO.puts(device, Cheer.Ansi.paint("ARGUMENTS:", :bright))
 
       for {name, arg_opts} <- visible_arguments do
         display_name = Keyword.get(arg_opts, :value_name, Atom.to_string(name))
@@ -97,6 +100,7 @@ defmodule Cheer.Help do
         deprecated = if deprecated != "", do: " " <> deprecated, else: ""
 
         IO.puts(
+          device,
           wrap_line(
             "  #{String.pad_trailing("<#{display_name}>", 20)} ",
             "#{help}#{required}#{deprecated}"
@@ -111,10 +115,13 @@ defmodule Cheer.Help do
         tva_required =
           if Keyword.get(tva_opts, :required, false), do: " (required)", else: ""
 
-        IO.puts("  #{String.pad_trailing("<#{tva_name}>...", 20)} #{tva_help}#{tva_required}")
+        IO.puts(
+          device,
+          "  #{String.pad_trailing("<#{tva_name}>...", 20)} #{tva_help}#{tva_required}"
+        )
       end
 
-      IO.puts("")
+      IO.puts(device, "")
     end
 
     # Merge inherited global options from parents
@@ -136,15 +143,15 @@ defmodule Cheer.Help do
       {default_section, headed_sections} = group_options_by_heading(visible_options)
 
       if default_section != [] do
-        IO.puts(Cheer.Ansi.paint("OPTIONS:", :bright))
-        for opt <- default_section, do: IO.puts(format_option(opt, long))
-        IO.puts("")
+        IO.puts(device, Cheer.Ansi.paint("OPTIONS:", :bright))
+        for opt <- default_section, do: IO.puts(device, format_option(opt, long))
+        IO.puts(device, "")
       end
 
       for {heading, opts_in_heading} <- headed_sections do
-        IO.puts(Cheer.Ansi.paint("#{String.upcase(heading)}:", :bright))
-        for opt <- opts_in_heading, do: IO.puts(format_option(opt, long))
-        IO.puts("")
+        IO.puts(device, Cheer.Ansi.paint("#{String.upcase(heading)}:", :bright))
+        for opt <- opts_in_heading, do: IO.puts(device, format_option(opt, long))
+        IO.puts(device, "")
       end
     end
 
@@ -160,23 +167,24 @@ defmodule Cheer.Help do
           end
 
         IO.puts(
+          device,
           "  [#{group_name}] (#{constraint}): " <>
             Enum.map_join(members, ", ", &"--#{flag_from(&1)}")
         )
       end
 
-      IO.puts("")
+      IO.puts(device, "")
     end
 
-    IO.puts(format_builtin("h", "help", "Print help"))
+    IO.puts(device, format_builtin("h", "help", "Print help"))
 
     if meta[:version] do
-      IO.puts(format_builtin("V", "version", "Print version"))
+      IO.puts(device, format_builtin("V", "version", "Print version"))
     end
 
     if meta[:after_help] do
-      IO.puts("")
-      IO.puts(meta.after_help)
+      IO.puts(device, "")
+      IO.puts(device, meta.after_help)
     end
 
     :ok
