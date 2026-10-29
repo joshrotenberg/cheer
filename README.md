@@ -65,7 +65,7 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
 <!-- x-release-please-start-version -->
 ```elixir
 def deps do
-  [{:cheer, "~> 0.2.3"}]
+  [{:cheer, "~> 0.3.0"}]
 end
 ```
 <!-- x-release-please-end -->
