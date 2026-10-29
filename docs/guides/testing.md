@@ -23,9 +23,18 @@ module, argv, and an optional `prog`.
 %Cheer.Test{
   return: term(),            # what run/2 returned, or {:error, :usage} on a usage error
   output: String.t(),        # everything written to stdout during the invocation
-  error_output: String.t()   # everything written to stderr during the invocation
+  error_output: String.t()   # cheer's diagnostics for this call
 }
 ```
+
+`error_output` holds what cheer wrote as diagnostics during the call: usage
+errors, suggestions, the help printed after an error, and deprecation warnings.
+They go to a device private to the call, so `error_output` contains nothing
+from other processes and exact or empty assertions on it are safe in
+`async: true` tests. Text a command's own `run/2` writes to `:stderr` is not
+included; capture that with `ExUnit.CaptureIO.capture_io(:stderr, ...)`, which
+sees every process's stderr and so belongs in `async: false` tests when you
+assert on it exactly.
 
 ## Testing validation failures
 

@@ -3,9 +3,12 @@ defmodule Cheer.Test do
   In-process test runner for CLI commands.
 
   Invokes a command capturing stdout, stderr, and the return value, without
-  spawning a subprocess. Usage errors and the help printed after them go to
-  stderr, so they appear in `error_output`; requested help and command output
-  appear in `output`.
+  spawning a subprocess. `output` is what the call wrote to stdout. `error_output`
+  is what cheer itself wrote as diagnostics: usage errors, suggestions, the help
+  printed after an error, and deprecation warnings. It goes to a device private
+  to the call, so it holds nothing from other processes and is safe to assert
+  on in `async: true` tests. What a command's own `run/2` writes to `:stderr` is
+  not included; capture that with `ExUnit.CaptureIO.capture_io(:stderr, ...)`.
 
   ## Usage
 
@@ -32,21 +35,27 @@ defmodule Cheer.Test do
   def run(command, argv, opts \\ []) do
     caller = self()
 
-    error_output =
-      ExUnit.CaptureIO.capture_io(:stderr, fn ->
-        output =
-          ExUnit.CaptureIO.capture_io(fn ->
-            send(caller, {:cheer_test_result, Cheer.run(command, argv, opts)})
-          end)
+    {:ok, device} = StringIO.open("")
+    previous = Process.put(:cheer_error_device, device)
 
-        send(caller, {:cheer_test_output, output})
-      end)
+    try do
+      output =
+        ExUnit.CaptureIO.capture_io(fn ->
+          send(caller, {:cheer_test_result, Cheer.run(command, argv, opts)})
+        end)
 
-    output = receive_tagged(:cheer_test_output, "")
-    return = receive_tagged(:cheer_test_result, nil)
+      {_input, error_output} = StringIO.contents(device)
+      return = receive_tagged(:cheer_test_result, nil)
 
-    %__MODULE__{return: return, output: output, error_output: error_output}
+      %__MODULE__{return: return, output: output, error_output: error_output}
+    after
+      restore_error_device(previous)
+      StringIO.close(device)
+    end
   end
+
+  defp restore_error_device(nil), do: Process.delete(:cheer_error_device)
+  defp restore_error_device(device), do: Process.put(:cheer_error_device, device)
 
   defp receive_tagged(tag, default) do
     receive do

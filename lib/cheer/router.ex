@@ -133,7 +133,7 @@ defmodule Cheer.Router do
         {:error, :usage}
 
       _ ->
-        IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} unknown command '#{token}'")
+        IO.puts(error_device(), "#{Cheer.Ansi.paint("error:", :red)} unknown command '#{token}'")
         {:error, :usage}
     end
   end
@@ -173,9 +173,9 @@ defmodule Cheer.Router do
       when meta.subcommands != [] and
              (meta.subcommand_required or
                 (argv != [] and not external? and not args_conflict?)) ->
-        IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} a subcommand is required")
-        IO.puts(:stderr, "")
-        Cheer.Help.print(command, Keyword.put(opts, :device, :stderr))
+        IO.puts(error_device(), "#{Cheer.Ansi.paint("error:", :red)} a subcommand is required")
+        IO.puts(error_device(), "")
+        Cheer.Help.print(command, Keyword.put(opts, :device, error_device()))
         {:error, :usage}
 
       # No subcommand matched (argv is empty or starts with an option). When the
@@ -390,7 +390,7 @@ defmodule Cheer.Router do
           :handled
 
         pos_error = positional_count_error(meta.arguments, positional_map) ->
-          IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} #{pos_error}")
+          IO.puts(error_device(), "#{Cheer.Ansi.paint("error:", :red)} #{pos_error}")
           :handled
 
         true ->
@@ -409,7 +409,7 @@ defmodule Cheer.Router do
             {:ok, args}
           else
             {:error, msg} ->
-              IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} #{msg}")
+              IO.puts(error_device(), "#{Cheer.Ansi.paint("error:", :red)} #{msg}")
               :handled
           end
       end
@@ -490,7 +490,7 @@ defmodule Cheer.Router do
             {:ok, args}
           else
             {:error, msg} ->
-              IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} #{msg}")
+              IO.puts(error_device(), "#{Cheer.Ansi.paint("error:", :red)} #{msg}")
               :handled
           end
       end
@@ -1021,8 +1021,8 @@ defmodule Cheer.Router do
   end
 
   defp print_ambiguous_subcommand(token, candidates) do
-    IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} '#{token}' is ambiguous")
-    IO.puts(:stderr, "candidates: #{Enum.join(candidates, ", ")}")
+    IO.puts(error_device(), "#{Cheer.Ansi.paint("error:", :red)} '#{token}' is ambiguous")
+    IO.puts(error_device(), "candidates: #{Enum.join(candidates, ", ")}")
   end
 
   # -- num_args (multi-value options) --
@@ -1269,6 +1269,10 @@ defmodule Cheer.Router do
   defp num_args_error(name, min, max, got),
     do: "--#{flag_string(name)} expects between #{min} and #{max} values, got #{got}"
 
+  # Where diagnostics go: stderr, unless Cheer.Test.run/3 has set a private
+  # device for this process so a test sees only its own call's output (#168).
+  defp error_device, do: Process.get(:cheer_error_device, :stderr)
+
   defp flag_string(name) when is_atom(name),
     do: name |> Atom.to_string() |> String.replace("_", "-")
 
@@ -1364,13 +1368,13 @@ defmodule Cheer.Router do
     flags = Enum.map_join(keys, ", ", &"--#{flag_string(&1)}")
 
     IO.puts(
-      :stderr,
+      error_device(),
       "#{Cheer.Ansi.paint("error:", :red)} #{flags} belongs to '#{meta.name}' " <>
         "and does not apply to subcommand '#{token}'"
     )
 
-    IO.puts(:stderr, "")
-    Cheer.Help.print(command, Keyword.put(opts, :device, :stderr))
+    IO.puts(error_device(), "")
+    Cheer.Help.print(command, Keyword.put(opts, :device, error_device()))
   end
 
   # -- OptionParser spec --
@@ -1462,7 +1466,7 @@ defmodule Cheer.Router do
     for {name, opts} <- options, MapSet.member?(provided, name) do
       case Keyword.get(opts, :deprecated) do
         dep when dep not in [nil, false] ->
-          IO.puts(:stderr, deprecation_message("--#{flag_string(name)}", dep))
+          IO.puts(error_device(), deprecation_message("--#{flag_string(name)}", dep))
 
         _ ->
           :ok
@@ -1476,7 +1480,7 @@ defmodule Cheer.Router do
     for {name, opts} <- arguments, MapSet.member?(provided, name) do
       case Keyword.get(opts, :deprecated) do
         dep when dep not in [nil, false] ->
-          IO.puts(:stderr, deprecation_message("<#{name}>", dep))
+          IO.puts(error_device(), deprecation_message("<#{name}>", dep))
 
         _ ->
           :ok
@@ -1489,7 +1493,7 @@ defmodule Cheer.Router do
   defp warn_deprecated_command(meta) do
     case Map.get(meta, :deprecated, false) do
       dep when dep not in [nil, false] ->
-        IO.puts(:stderr, deprecation_message("command '#{meta.name}'", dep))
+        IO.puts(error_device(), deprecation_message("command '#{meta.name}'", dep))
 
       _ ->
         :ok
@@ -1513,7 +1517,7 @@ defmodule Cheer.Router do
   end
 
   defp print_unknown_command(meta, token) do
-    IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} unknown command '#{token}'")
+    IO.puts(error_device(), "#{Cheer.Ansi.paint("error:", :red)} unknown command '#{token}'")
 
     # Hidden commands stay dispatchable but are not advertised in suggestions or
     # the available-commands list.
@@ -1532,17 +1536,17 @@ defmodule Cheer.Router do
 
       case suggest(token, names) do
         nil -> :ok
-        suggestion -> IO.puts(:stderr, "\n  Did you mean '#{suggestion}'?")
+        suggestion -> IO.puts(error_device(), "\n  Did you mean '#{suggestion}'?")
       end
 
-      IO.puts(:stderr, "\nAvailable commands:")
+      IO.puts(error_device(), "\nAvailable commands:")
 
       for sub <- visible do
         sub_meta = sub.__cheer_meta__()
-        IO.puts(:stderr, "  #{sub_meta.name}")
+        IO.puts(error_device(), "  #{sub_meta.name}")
       end
 
-      IO.puts(:stderr, "")
+      IO.puts(error_device(), "")
     end
 
     :ok
@@ -1563,17 +1567,17 @@ defmodule Cheer.Router do
     labels = Enum.map_join(missing_names, ", ", &"<#{&1}>")
 
     IO.puts(
-      :stderr,
+      error_device(),
       "#{Cheer.Ansi.paint("error:", :red)} missing required argument(s): #{labels}"
     )
 
-    IO.puts(:stderr, "")
-    Cheer.Help.print(command, Keyword.put(opts, :device, :stderr))
+    IO.puts(error_device(), "")
+    Cheer.Help.print(command, Keyword.put(opts, :device, error_device()))
   end
 
   defp print_invalid_options_error(command, invalid, opts, all_options) do
     flags = Enum.map_join(invalid, ", ", fn {flag, _} -> flag end)
-    IO.puts(:stderr, "#{Cheer.Ansi.paint("error:", :red)} unknown option(s): #{flags}")
+    IO.puts(error_device(), "#{Cheer.Ansi.paint("error:", :red)} unknown option(s): #{flags}")
 
     candidates = option_name_candidates(all_options)
 
@@ -1582,14 +1586,14 @@ defmodule Cheer.Router do
       # reports it in `invalid` too) does not suggest the flag the user typed.
       with "--" <> name <- flag,
            suggestion when not is_nil(suggestion) <- suggest(name, candidates -- [name]) do
-        IO.puts(:stderr, "\n  Did you mean '--#{suggestion}'?")
+        IO.puts(error_device(), "\n  Did you mean '--#{suggestion}'?")
       else
         _ -> :ok
       end
     end)
 
-    IO.puts(:stderr, "")
-    Cheer.Help.print(command, Keyword.put(opts, :device, :stderr))
+    IO.puts(error_device(), "")
+    Cheer.Help.print(command, Keyword.put(opts, :device, error_device()))
   end
 
   defp option_name_candidates(all_options) do

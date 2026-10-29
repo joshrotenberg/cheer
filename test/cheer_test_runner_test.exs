@@ -69,6 +69,22 @@ defmodule Cheer.TestRunnerTest do
     end
   end
 
+  defmodule Raises do
+    use Cheer.Command
+
+    command "raises" do
+      about("Raises from run/2")
+    end
+
+    @impl Cheer.Command
+    def run(_args, _raw), do: raise("boom")
+  end
+
+  test "the error device is restored when the command raises" do
+    assert_raise RuntimeError, "boom", fn -> Cheer.Test.run(Raises, []) end
+    assert Process.get(:cheer_error_device) == nil
+  end
+
   test "the error device is restored after the call" do
     Cheer.Test.run(Leaf, ["--bogus"])
     assert Process.get(:cheer_error_device) == nil
