@@ -21,6 +21,8 @@ jobs:
             otp: "27"
           - elixir: "1.19"
             otp: "28"
+          - elixir: "1.20"
+            otp: "29"
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +39,8 @@ jobs:
           key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
 
       - run: mix deps.get
+      - run: mix deps.unlock --check-unused
+      - run: mix hex.audit
       - run: mix compile --warnings-as-errors
       - run: mix test
       - run: mix format --check-formatted
@@ -84,4 +88,4 @@ jobs:
           otp-version: "28"
 
       - run: mix deps.get
-      - run: mix docs
+      - run: mix docs --warnings-as-errors
