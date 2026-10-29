@@ -70,6 +70,16 @@ end
 ```
 <!-- x-release-please-end -->
 
+To keep the DSL paren-free under `mix format`, import cheer's formatter settings in your
+`.formatter.exs`:
+
+```elixir
+[
+  import_deps: [:cheer],
+  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
+]
+```
+
 ## Documentation
 
 Full docs on [hexdocs.pm/cheer](https://hexdocs.pm/cheer):
