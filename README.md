@@ -101,7 +101,8 @@ Full docs on [hexdocs.pm/cheer](https://hexdocs.pm/cheer):
   [Greeter](https://hexdocs.pm/cheer/greeter.html) (single command),
   [Devtool](https://hexdocs.pm/cheer/devtool.html) (nested subcommands with hooks and groups),
   [Mix task](https://hexdocs.pm/cheer/mix_task.html) (drive a `mix` task with a command),
-  [Server](https://hexdocs.pm/cheer/server.html) (argv configures a supervision tree).
+  [Server](https://hexdocs.pm/cheer/server.html) (argv configures a supervision tree),
+  [Script](https://hexdocs.pm/cheer/script.html) (a single-file CLI with `Mix.install`).
 
 ## Runnable examples
 
