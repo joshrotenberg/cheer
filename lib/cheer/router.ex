@@ -262,10 +262,43 @@ defmodule Cheer.Router do
   # -- Parsing pipeline --
 
   defp parse_and_validate(command, meta, argv, opts) do
+    check_global_collisions!(command, meta, opts)
+
     if Map.get(meta, :external_subcommands, false) do
       parse_with_external_subcommand(command, meta, argv, opts)
     else
       parse_standard(command, meta, argv, opts)
+    end
+  end
+
+  # Inherited globals land in the same args map as this command's own
+  # parameters, so an argument with a global's name would silently win (#165).
+  # Checked at dispatch because a parent cannot read its children's metadata at
+  # compile time. A local option with the global's name is an override, not a
+  # collision.
+  defp check_global_collisions!(command, meta, opts) do
+    globals =
+      for {name, _} <- Keyword.get(opts, :parent_globals, []),
+          not List.keymember?(meta.options, name, 0),
+          do: name
+
+    trailing =
+      case meta.trailing_var_arg do
+        {name, _opts} -> [name]
+        nil -> []
+      end
+
+    case Enum.uniq(for {name, _} <- meta.arguments, name in globals, do: name) ++
+           Enum.filter(trailing, &(&1 in globals)) do
+      [] ->
+        :ok
+
+      names ->
+        raise ArgumentError,
+              "#{inspect(command)} declares #{Enum.map_join(names, ", ", &inspect/1)} " <>
+                "as an argument, and an inherited global option has the same name. " <>
+                "They share one key in args, so the global's value would be lost. " <>
+                "Rename the argument, or redeclare the option in #{inspect(command)}."
     end
   end
 

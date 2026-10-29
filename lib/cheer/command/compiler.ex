@@ -71,6 +71,23 @@ defmodule Cheer.Command.Compiler do
       )
     end
 
+    # Validate: arguments, options, and the trailing var arg share one args map,
+    # so a name declared twice silently drops one of the values (#165).
+    # Collisions with inherited global options are checked at dispatch instead
+    # (Cheer.Router), since a parent cannot read its children's metadata here.
+    case duplicate_param_names(arguments, options, trailing_var_arg) do
+      [] ->
+        :ok
+
+      dupes ->
+        IO.warn(
+          "#{inspect(env.module)} declares #{Enum.map_join(dupes, ", ", &inspect/1)} " <>
+            "more than once among its arguments, options, and trailing var arg. " <>
+            "They share one key in args, so one of the values would be lost.",
+          Macro.Env.stacktrace(env)
+        )
+    end
+
     # Build groups map: %{group_name => %{opts: [...], members: [...]}}
     groups = build_groups(raw_groups)
 
@@ -174,5 +191,20 @@ defmodule Cheer.Command.Compiler do
       members = Enum.map(entries, fn {_, _, member} -> member end)
       {name, %{opts: opts, members: members}}
     end)
+  end
+
+  # `:rest` stands in for an undeclared trailing var arg: that key is always set.
+  defp duplicate_param_names(arguments, options, trailing_var_arg) do
+    trailing =
+      case trailing_var_arg do
+        {name, _opts} -> name
+        nil -> :rest
+      end
+
+    (Enum.map(arguments, &elem(&1, 0)) ++ Enum.map(options, &elem(&1, 0)) ++ [trailing])
+    |> Enum.frequencies()
+    |> Enum.filter(fn {_name, count} -> count > 1 end)
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.sort()
   end
 end
