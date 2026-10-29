@@ -47,7 +47,7 @@ defmodule Cheer.AnsiTest do
   end
 
   test "error output has a red error prefix" do
-    err = capture_io(fn -> Cheer.run(ColorCmd, ["--nope", "x"]) end)
+    err = capture_io(:stderr, fn -> Cheer.run(ColorCmd, ["--nope", "x"]) end)
     assert err =~ "\e[31merror:"
   end
 end

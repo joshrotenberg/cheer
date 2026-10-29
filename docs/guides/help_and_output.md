@@ -139,6 +139,14 @@ warning: --old-flag is deprecated: use --new-flag
 warning: command 'old-name' is deprecated: use `new-name` instead
 ```
 
+## Output streams
+
+Usage errors (`error:` lines, "Did you mean" suggestions, and the help printed
+after an error) and deprecation warnings go to stderr. Help requested with
+`--help`, `-h`, or `help <command>`, `--version` output, and the help printed
+when a parent command is run with no arguments go to stdout. A usage error
+exits 2 under `Cheer.main/3`.
+
 ## Color
 
 When help or an error is printed to an interactive terminal, section headings are

@@ -21,21 +21,23 @@ module, argv, and an optional `prog`.
 
 ```elixir
 %Cheer.Test{
-  return: term(),       # whatever your run/2 returned (or :ok if cheer handled an error)
-  output: String.t()    # everything written to stdout during the invocation
+  return: term(),            # what run/2 returned, or {:error, :usage} on a usage error
+  output: String.t(),        # everything written to stdout during the invocation
+  error_output: String.t()   # everything written to stderr during the invocation
 }
 ```
 
 ## Testing validation failures
 
-When validation fails, cheer prints an error and does not invoke `run/2`.
-Assert on the captured output:
+When validation fails, cheer prints an error to stderr and does not invoke
+`run/2`. Assert on the return value and `error_output`:
 
 ```elixir
 test "rejects out-of-range times" do
   result = Cheer.Test.run(MyApp.CLI.Greet, ["world", "--times", "100"])
 
-  assert result.output =~ "must be 1-10"
+  assert result.return == {:error, :usage}
+  assert result.error_output =~ "must be 1-10"
   refute result.output =~ "Hello"
 end
 ```

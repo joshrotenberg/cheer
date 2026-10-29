@@ -149,7 +149,7 @@ defmodule CheerTest do
   describe "required argument validation" do
     test "prints error when required argument is missing" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestGreet, [])
         end)
 
@@ -159,7 +159,7 @@ defmodule CheerTest do
 
     test "prints error when one of multiple required arguments is missing" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestMultiArg, ["only_source"])
         end)
 
@@ -168,7 +168,7 @@ defmodule CheerTest do
 
     test "prints error when all required arguments are missing" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestMultiArg, [])
         end)
 
@@ -311,7 +311,7 @@ defmodule CheerTest do
 
     test "the rendered flag is accepted by the parser" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestUnderscoreOption, ["--base-port", "17500"])
         end)
 
@@ -325,7 +325,7 @@ defmodule CheerTest do
   describe "unknown subcommand error" do
     test "prints error with unknown command name" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestRoot, ["bogus"])
         end)
 
@@ -334,7 +334,7 @@ defmodule CheerTest do
 
     test "lists available subcommands" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestBranch, ["nope"])
         end)
 
@@ -346,7 +346,7 @@ defmodule CheerTest do
 
     test "unknown command on root with single subcommand" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestRoot, ["deploy"])
         end)
 
@@ -430,7 +430,7 @@ defmodule CheerTest do
     end
 
     test "help with unknown subcommand shows error" do
-      output = capture_io(fn -> Cheer.run(TestRoot, ["help", "nope"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRoot, ["help", "nope"]) end)
       assert output =~ "error: unknown command 'nope'"
     end
   end
@@ -454,7 +454,7 @@ defmodule CheerTest do
   describe "invalid options" do
     test "reports unknown flags" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestGreet, ["world", "--unknown-flag"])
         end)
 
@@ -463,7 +463,7 @@ defmodule CheerTest do
 
     test "reports unknown short flags" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           Cheer.run(TestDefaults, ["--bogus", "val"])
         end)
 
@@ -485,24 +485,24 @@ defmodule CheerTest do
 
   describe "unknown-flag suggestions (#71)" do
     test "suggests the closest option for a typo'd flag" do
-      out = capture_io(fn -> Cheer.run(TestSuggest, ["--colr", "red"]) end)
+      out = capture_io(:stderr, fn -> Cheer.run(TestSuggest, ["--colr", "red"]) end)
       assert out =~ "unknown option(s): --colr"
       assert out =~ "Did you mean '--color'?"
     end
 
     test "suggests an alias when it is the closest match" do
-      out = capture_io(fn -> Cheer.run(TestSuggest, ["--colour-", "red"]) end)
+      out = capture_io(:stderr, fn -> Cheer.run(TestSuggest, ["--colour-", "red"]) end)
       assert out =~ "Did you mean '--colour'?"
     end
 
     test "prints no suggestion when nothing is close" do
-      out = capture_io(fn -> Cheer.run(TestSuggest, ["--zzzzzz"]) end)
+      out = capture_io(:stderr, fn -> Cheer.run(TestSuggest, ["--zzzzzz"]) end)
       assert out =~ "unknown option(s): --zzzzzz"
       refute out =~ "Did you mean"
     end
 
     test "a known option given a bad value does not suggest itself" do
-      out = capture_io(fn -> Cheer.run(TestSuggest, ["--port", "abc"]) end)
+      out = capture_io(:stderr, fn -> Cheer.run(TestSuggest, ["--port", "abc"]) end)
       assert out =~ "unknown option(s): --port"
       refute out =~ "Did you mean"
     end
@@ -591,7 +591,7 @@ defmodule CheerTest do
     end
 
     test "fails when validation rejects value" do
-      output = capture_io(fn -> Cheer.run(TestValidation, ["--port", "80"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestValidation, ["--port", "80"]) end)
       assert output =~ "port must be 1024-65535"
     end
 
@@ -602,7 +602,9 @@ defmodule CheerTest do
 
     test "choices rejects invalid value" do
       output =
-        capture_io(fn -> Cheer.run(TestValidation, ["--port", "8080", "--format", "yaml"]) end)
+        capture_io(:stderr, fn ->
+          Cheer.run(TestValidation, ["--port", "8080", "--format", "yaml"])
+        end)
 
       assert output =~ "must be one of"
     end
@@ -645,7 +647,11 @@ defmodule CheerTest do
 
   describe "argument-level validate and choices (#69)" do
     test "argument :validate rejects an invalid value" do
-      out = capture_io(fn -> assert Cheer.run(TestArgValidate, ["-5"]) == {:error, :usage} end)
+      out =
+        capture_io(:stderr, fn ->
+          assert Cheer.run(TestArgValidate, ["-5"]) == {:error, :usage}
+        end)
+
       assert out =~ "port must be positive"
     end
 
@@ -655,7 +661,9 @@ defmodule CheerTest do
 
     test "argument :choices rejects a value outside the set" do
       out =
-        capture_io(fn -> assert Cheer.run(TestArgChoices, ["staging"]) == {:error, :usage} end)
+        capture_io(:stderr, fn ->
+          assert Cheer.run(TestArgChoices, ["staging"]) == {:error, :usage}
+        end)
 
       assert out =~ "must be one of"
     end
@@ -699,7 +707,7 @@ defmodule CheerTest do
     end
 
     test "~w(...) choices are enforced at validation time" do
-      output = capture_io(fn -> Cheer.run(TestSigilChoices, ["--effort", "extreme"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestSigilChoices, ["--effort", "extreme"]) end)
       assert output =~ "must be one of"
     end
   end
@@ -732,7 +740,7 @@ defmodule CheerTest do
     end
 
     test "too few values is a usage error" do
-      output = capture_io(fn -> Cheer.run(TestNumArgs, ["--point", "1"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestNumArgs, ["--point", "1"]) end)
       assert output =~ "--point expects 2 value(s), got 1"
     end
 
@@ -757,7 +765,7 @@ defmodule CheerTest do
     end
 
     test "--flag=value inline form yields a single value" do
-      output = capture_io(fn -> Cheer.run(TestNumArgs, ["--point=1"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestNumArgs, ["--point=1"]) end)
       assert output =~ "--point expects 2 value(s), got 1"
     end
 
@@ -908,7 +916,7 @@ defmodule CheerTest do
     end
 
     test "fails when constraint violated" do
-      output = capture_io(fn -> Cheer.run(TestCrossValidation, ["--tls"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestCrossValidation, ["--tls"]) end)
       assert output =~ "--tls requires --cert-file"
     end
   end
@@ -1111,13 +1119,17 @@ defmodule CheerTest do
 
     test "every cross-param validator is enforced, not just the first" do
       out =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           assert Cheer.run(TestMultiValidators, ["--a", "1"]) == {:error, :usage}
         end)
 
       assert out =~ "b required"
 
-      out2 = capture_io(fn -> assert Cheer.run(TestMultiValidators, []) == {:error, :usage} end)
+      out2 =
+        capture_io(:stderr, fn ->
+          assert Cheer.run(TestMultiValidators, []) == {:error, :usage}
+        end)
+
       assert out2 =~ "a required"
 
       assert {:ok, _} = Cheer.run(TestMultiValidators, ["--a", "1", "--b", "2"])
@@ -1160,7 +1172,7 @@ defmodule CheerTest do
     end
 
     test "mutually exclusive: rejects multiple" do
-      output = capture_io(fn -> Cheer.run(TestGroups, ["--json", "--csv"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestGroups, ["--json", "--csv"]) end)
       assert output =~ "mutually exclusive"
     end
 
@@ -1170,7 +1182,7 @@ defmodule CheerTest do
     end
 
     test "co-occurring: rejects partial" do
-      output = capture_io(fn -> Cheer.run(TestGroups, ["--username", "me"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestGroups, ["--username", "me"]) end)
       assert output =~ "must be used together"
     end
 
@@ -1206,7 +1218,7 @@ defmodule CheerTest do
 
   describe "required group (#100)" do
     test "errors when no member of a required group is provided" do
-      output = capture_io(fn -> Cheer.run(TestRequiredGroup, ["--a"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRequiredGroup, ["--a"]) end)
       assert output =~ "one of --file, --stdin is required (group: src)"
     end
 
@@ -1217,10 +1229,12 @@ defmodule CheerTest do
     test "required + mutually_exclusive means exactly one" do
       assert {:ok, _} = Cheer.run(TestRequiredGroup, ["--file", "x", "--a"])
 
-      none = capture_io(fn -> Cheer.run(TestRequiredGroup, ["--file", "x"]) end)
+      none = capture_io(:stderr, fn -> Cheer.run(TestRequiredGroup, ["--file", "x"]) end)
       assert none =~ "one of --a, --b is required"
 
-      both = capture_io(fn -> Cheer.run(TestRequiredGroup, ["--file", "x", "--a", "--b"]) end)
+      both =
+        capture_io(:stderr, fn -> Cheer.run(TestRequiredGroup, ["--file", "x", "--a", "--b"]) end)
+
       assert both =~ "mutually exclusive"
     end
   end
@@ -1229,13 +1243,14 @@ defmodule CheerTest do
 
   describe "typo suggestions" do
     test "suggests similar command name" do
-      output = capture_io(fn -> Cheer.run(TestBranch, ["grete"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestBranch, ["grete"]) end)
       assert output =~ "Did you mean"
       assert output =~ "greet"
     end
 
     test "no suggestion when nothing close" do
-      output = capture_io(fn -> Cheer.run(TestBranch, ["zzzzz"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestBranch, ["zzzzz"]) end)
+      assert output =~ "unknown command"
       refute output =~ "Did you mean"
     end
   end
@@ -1256,7 +1271,7 @@ defmodule CheerTest do
 
     test "captures missing arg error" do
       result = Cheer.Test.run(TestGreet, [])
-      assert result.output =~ "missing required"
+      assert result.error_output =~ "missing required"
     end
   end
 
@@ -1579,7 +1594,7 @@ defmodule CheerTest do
     end
 
     test "required multi rejects empty" do
-      output = capture_io(fn -> Cheer.run(TestMultiRequired, []) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestMultiRequired, []) end)
       assert output =~ "missing required"
     end
 
@@ -1732,7 +1747,7 @@ defmodule CheerTest do
     end
 
     test "hidden subcommand is absent from the unknown-command listing" do
-      output = capture_io(fn -> Cheer.run(TestHiddenCmdRoot, ["nope"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestHiddenCmdRoot, ["nope"]) end)
       assert output =~ "Available commands:"
       refute output =~ "debug"
     end
@@ -1788,7 +1803,7 @@ defmodule CheerTest do
     end
 
     test "did you mean considers aliases" do
-      output = capture_io(fn -> Cheer.run(TestAliasRoot, ["checkou"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestAliasRoot, ["checkou"]) end)
       assert output =~ "Did you mean"
       assert output =~ "checkout"
     end
@@ -2089,7 +2104,7 @@ defmodule CheerTest do
 
     test "unknown option is a usage error" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           assert {:error, :usage} =
                    Cheer.run(TestLeadingOptsRoot, ["--bogus", "deploy", "--target", "prod"])
         end)
@@ -2099,7 +2114,7 @@ defmodule CheerTest do
 
     test "non-global root option is a usage error" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           assert {:error, :usage} =
                    Cheer.run(TestLeadingOptsRoot, ["--local", "x", "deploy", "--target", "prod"])
         end)
@@ -2110,7 +2125,7 @@ defmodule CheerTest do
 
     test "options with no subcommand are a usage error" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           assert {:error, :usage} = Cheer.run(TestLeadingOptsRoot, ["-v"])
         end)
 
@@ -2119,7 +2134,7 @@ defmodule CheerTest do
 
     test "unknown option with no subcommand is a usage error" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           assert {:error, :usage} = Cheer.run(TestLeadingOptsRoot, ["--bogus"])
         end)
 
@@ -2130,7 +2145,6 @@ defmodule CheerTest do
       for argv <- [["--help"], ["-h"], ["-v", "--help"]] do
         output = capture_io(fn -> assert :ok = Cheer.run(TestLeadingOptsRoot, argv) end)
         assert output =~ "Usage: app", "help for #{inspect(argv)}"
-        refute output =~ "error:", "no error for #{inspect(argv)}"
       end
 
       for argv <- [["-V"], ["--version"], ["-v", "-V"]] do
@@ -2141,7 +2155,7 @@ defmodule CheerTest do
 
     test "empty argv still prints help with no error" do
       output = capture_io(fn -> assert :ok = Cheer.run(TestLeadingOptsRoot, []) end)
-      refute output =~ "error:"
+      assert output =~ "Usage: app"
     end
   end
 
@@ -2160,12 +2174,12 @@ defmodule CheerTest do
 
   describe "subcommand_required" do
     test "shows error when no subcommand given" do
-      output = capture_io(fn -> Cheer.run(TestSubRequired, []) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestSubRequired, []) end)
       assert output =~ "error: a subcommand is required"
     end
 
     test "still shows help after the error" do
-      output = capture_io(fn -> Cheer.run(TestSubRequired, []) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestSubRequired, []) end)
       assert output =~ "COMMANDS:"
     end
 
@@ -2328,7 +2342,7 @@ defmodule CheerTest do
     end
 
     test "required trailing errors when empty" do
-      output = capture_io(fn -> Cheer.run(TestTrailingRequired, []) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestTrailingRequired, []) end)
       assert output =~ "missing required"
       assert output =~ "files"
     end
@@ -2612,7 +2626,7 @@ defmodule CheerTest do
     end
 
     test "ambiguous prefix prints error and lists candidates" do
-      output = capture_io(fn -> Cheer.run(TestInferRoot, ["che"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestInferRoot, ["che"]) end)
       assert output =~ "error: 'che' is ambiguous"
       assert output =~ "candidates:"
       assert output =~ "check"
@@ -2625,12 +2639,12 @@ defmodule CheerTest do
     end
 
     test "non-matching prefix falls back to unknown command" do
-      output = capture_io(fn -> Cheer.run(TestInferRoot, ["xyz"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestInferRoot, ["xyz"]) end)
       assert output =~ "error: unknown command 'xyz'"
     end
 
     test "inference is disabled by default" do
-      output = capture_io(fn -> Cheer.run(TestNoInferRoot, ["sta"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestNoInferRoot, ["sta"]) end)
       assert output =~ "error: unknown command 'sta'"
     end
 
@@ -2645,7 +2659,7 @@ defmodule CheerTest do
     end
 
     test "help <ambiguous-prefix> reports the ambiguity" do
-      output = capture_io(fn -> Cheer.run(TestInferRoot, ["help", "che"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestInferRoot, ["help", "che"]) end)
       assert output =~ "is ambiguous"
     end
 
@@ -2723,7 +2737,7 @@ defmodule CheerTest do
     end
 
     test "errors when both conflicting options are set" do
-      output = capture_io(fn -> Cheer.run(TestConflicts, ["--json", "--yaml"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestConflicts, ["--json", "--yaml"]) end)
       assert output =~ "error: --json cannot be used with --yaml"
     end
 
@@ -2731,7 +2745,7 @@ defmodule CheerTest do
       # :yaml does not declare conflicts_with, but :json does. Validation
       # iterates options in declaration order, so the error message is always
       # phrased in terms of the option that owns the constraint.
-      output = capture_io(fn -> Cheer.run(TestConflicts, ["--yaml", "--json"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestConflicts, ["--yaml", "--json"]) end)
       assert output =~ "error: --json cannot be used with --yaml"
     end
 
@@ -2740,7 +2754,7 @@ defmodule CheerTest do
     end
 
     test "list form errors on first conflict found" do
-      output = capture_io(fn -> Cheer.run(TestConflictsList, ["--json", "--toml"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestConflictsList, ["--json", "--toml"]) end)
       assert output =~ "error: --json cannot be used with --toml"
     end
 
@@ -2756,7 +2770,7 @@ defmodule CheerTest do
     end
 
     test "errors when option is set without its dependency" do
-      output = capture_io(fn -> Cheer.run(TestRequires, ["--user", "alice"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRequires, ["--user", "alice"]) end)
       assert output =~ "error: --user requires --password"
     end
 
@@ -2765,7 +2779,9 @@ defmodule CheerTest do
     end
 
     test "list form errors when any required option is missing" do
-      output = capture_io(fn -> Cheer.run(TestRequiresList, ["--deploy", "--env", "prod"]) end)
+      output =
+        capture_io(:stderr, fn -> Cheer.run(TestRequiresList, ["--deploy", "--env", "prod"]) end)
+
       assert output =~ "error: --deploy requires --region"
     end
 
@@ -2856,7 +2872,7 @@ defmodule CheerTest do
     end
 
     test "required when condition holds and missing" do
-      output = capture_io(fn -> Cheer.run(TestRequiredIf, ["--format", "json"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRequiredIf, ["--format", "json"]) end)
       assert output =~ "error: --output is required when --format is 'json'"
     end
 
@@ -2870,22 +2886,24 @@ defmodule CheerTest do
     end
 
     test "fires on the first matching condition in a multi-pair list" do
-      output = capture_io(fn -> Cheer.run(TestRequiredIfMulti, ["--mode", "prod"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRequiredIfMulti, ["--mode", "prod"]) end)
       assert output =~ "error: --secret is required when --mode is 'prod'"
     end
 
     test "fires when only the second condition matches" do
-      output = capture_io(fn -> Cheer.run(TestRequiredIfMulti, ["--env", "live"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRequiredIfMulti, ["--env", "live"]) end)
       assert output =~ "error: --secret is required when --env is 'live'"
     end
 
     test "matches integer trigger values" do
-      output = capture_io(fn -> Cheer.run(TestRequiredIfNonString, ["--retries", "0"]) end)
+      output =
+        capture_io(:stderr, fn -> Cheer.run(TestRequiredIfNonString, ["--retries", "0"]) end)
+
       assert output =~ "error: --notify is required when --retries is 0"
     end
 
     test "matches boolean trigger values" do
-      output = capture_io(fn -> Cheer.run(TestRequiredIfNonString, ["--dry-run"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRequiredIfNonString, ["--dry-run"]) end)
       assert output =~ "error: --notify is required when --dry-run is true"
     end
 
@@ -2896,7 +2914,7 @@ defmodule CheerTest do
 
   describe "required_unless" do
     test "errors when option missing and dependency absent" do
-      output = capture_io(fn -> Cheer.run(TestRequiredUnless, []) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRequiredUnless, []) end)
       assert output =~ "error: --config is required unless --inline is provided"
     end
 
@@ -2914,7 +2932,7 @@ defmodule CheerTest do
     end
 
     test "list form errors when none of the dependencies are present" do
-      output = capture_io(fn -> Cheer.run(TestRequiredUnlessList, []) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestRequiredUnlessList, []) end)
       assert output =~ "error: --input is required unless --stdin, --url is provided"
     end
   end
@@ -2947,7 +2965,7 @@ defmodule CheerTest do
 
   describe "required_unless_all and required_if_all (#107)" do
     test "required_unless_all errors unless every dependency is present" do
-      out = capture_io(fn -> Cheer.run(TestRequiredUnlessAll, ["--a"]) end)
+      out = capture_io(:stderr, fn -> Cheer.run(TestRequiredUnlessAll, ["--a"]) end)
       assert out =~ "--out is required unless --a, --b are all provided"
     end
 
@@ -2956,7 +2974,9 @@ defmodule CheerTest do
     end
 
     test "required_if_all fires only when every condition matches" do
-      out = capture_io(fn -> Cheer.run(TestRequiredIfAll, ["--env", "prod", "--force"]) end)
+      out =
+        capture_io(:stderr, fn -> Cheer.run(TestRequiredIfAll, ["--env", "prod", "--force"]) end)
+
       assert out =~ "--confirm is required when --env is 'prod' and --force is true"
     end
 
@@ -2998,12 +3018,14 @@ defmodule CheerTest do
     end
 
     test "conflicts_with still fires when both are user-supplied" do
-      out = capture_io(fn -> Cheer.run(TestProvenance, ["--quiet", "--verbose"]) end)
+      out = capture_io(:stderr, fn -> Cheer.run(TestProvenance, ["--quiet", "--verbose"]) end)
       assert out =~ "--verbose cannot be used with --quiet"
     end
 
     test "requires fails when the required (:multi) target is only defaulted" do
-      out = capture_io(fn -> Cheer.run(TestProvenance, ["--name", "n", "--mode", "x"]) end)
+      out =
+        capture_io(:stderr, fn -> Cheer.run(TestProvenance, ["--name", "n", "--mode", "x"]) end)
+
       assert out =~ "--name requires --tags"
     end
 
@@ -3012,7 +3034,7 @@ defmodule CheerTest do
     end
 
     test "required_unless still requires when the dependency is only defaulted" do
-      out = capture_io(fn -> Cheer.run(TestProvenance, []) end)
+      out = capture_io(:stderr, fn -> Cheer.run(TestProvenance, []) end)
       assert out =~ "--mode is required unless --verbose is provided"
     end
 
@@ -3027,7 +3049,9 @@ defmodule CheerTest do
 
     test "mutually_exclusive group still fires when two members are user-supplied" do
       out =
-        capture_io(fn -> Cheer.run(TestProvenance, ["--flag-b", "--count-a", "--mode", "x"]) end)
+        capture_io(:stderr, fn ->
+          Cheer.run(TestProvenance, ["--flag-b", "--count-a", "--mode", "x"])
+        end)
 
       assert out =~ "mutually exclusive"
     end
@@ -3061,7 +3085,7 @@ defmodule CheerTest do
 
   describe "subcommand usage line (#37)" do
     test "missing-arg error shows full subcommand path in usage" do
-      output = capture_io(fn -> Cheer.run(TestSubUsageRoot, ["info"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestSubUsageRoot, ["info"]) end)
       assert output =~ "error: missing required argument(s): <name>"
       assert output =~ "Usage: demo info <name>"
     end
@@ -3170,12 +3194,12 @@ defmodule CheerTest do
     end
 
     test "invalid parent option before external name still errors" do
-      output = capture_io(fn -> Cheer.run(TestExternalSub, ["--nope", "foo"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestExternalSub, ["--nope", "foo"]) end)
       assert output =~ "error: unknown option(s): --nope"
     end
 
     test "commands with subcommands and no external_subcommands still error on unknown tokens (regression)" do
-      output = capture_io(fn -> Cheer.run(TestNoExternalSub, ["surprise"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestNoExternalSub, ["surprise"]) end)
       assert output =~ "error: unknown command 'surprise'"
     end
   end
@@ -3221,7 +3245,7 @@ defmodule CheerTest do
     end
 
     test "an underprovided num_args flag is a usage error" do
-      output = capture_io(fn -> Cheer.run(TestExternalNumArgs, ["--point", "1"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestExternalNumArgs, ["--point", "1"]) end)
       assert output =~ "--point expects 2 value(s)"
     end
   end
@@ -3245,7 +3269,7 @@ defmodule CheerTest do
 
   describe "audit nits (#68)" do
     test "constraint error messages use kebab-case flag names" do
-      out = capture_io(fn -> Cheer.run(TestNits, ["--base-port", "1", "--dry-run"]) end)
+      out = capture_io(:stderr, fn -> Cheer.run(TestNits, ["--base-port", "1", "--dry-run"]) end)
       assert out =~ "--base-port cannot be used with --dry-run"
       refute out =~ "base_port"
     end
@@ -3303,7 +3327,7 @@ defmodule CheerTest do
     end
 
     test "a non-numeric flag still stops collection without allow_hyphen_values" do
-      output = capture_io(fn -> Cheer.run(TestHyphen, ["--range", "1", "--verbose"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestHyphen, ["--range", "1", "--verbose"]) end)
       assert output =~ "--range expects 2 value(s)"
     end
   end
@@ -3328,7 +3352,7 @@ defmodule CheerTest do
     end
 
     test "an option without allow_hyphen_values still rejects a hyphen value" do
-      output = capture_io(fn -> Cheer.run(TestHyphen, ["--plain", "-foo"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestHyphen, ["--plain", "-foo"]) end)
       assert output =~ "unknown option"
     end
   end
@@ -3369,7 +3393,7 @@ defmodule CheerTest do
     end
 
     test "rejects a delimited value with an element outside the choices" do
-      output = capture_io(fn -> Cheer.run(TestDelimiter, ["--colors", "red,purple"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestDelimiter, ["--colors", "red,purple"]) end)
       assert output =~ "must be one of"
     end
 
@@ -3419,7 +3443,7 @@ defmodule CheerTest do
     end
 
     test "an :error result is a usage failure with the flag name and message" do
-      output = capture_io(fn -> Cheer.run(TestParse, ["--mode", "x"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestParse, ["--mode", "x"]) end)
       assert output =~ "--mode: must be r or w"
     end
 
@@ -3525,13 +3549,15 @@ defmodule CheerTest do
 
   describe "choices error message styling (#110)" do
     test "a positional argument renders as <name>, not a flag" do
-      output = capture_io(fn -> Cheer.run(TestMsgStyle, ["blue"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestMsgStyle, ["blue"]) end)
       assert output =~ "<color> must be one of"
       refute output =~ "--color"
     end
 
     test "an option name is kebab-cased in the error" do
-      output = capture_io(fn -> Cheer.run(TestMsgStyle, ["red", "--log-level", "bad"]) end)
+      output =
+        capture_io(:stderr, fn -> Cheer.run(TestMsgStyle, ["red", "--log-level", "bad"]) end)
+
       assert output =~ "--log-level must be one of"
       refute output =~ "--log_level"
     end
@@ -3540,14 +3566,18 @@ defmodule CheerTest do
   describe "raising :parse / :validate functions (#111)" do
     test "a raising :parse yields a clean usage error, not a crash" do
       output =
-        capture_io(fn -> assert Cheer.run(TestRaising, ["--p", "x"]) == {:error, :usage} end)
+        capture_io(:stderr, fn ->
+          assert Cheer.run(TestRaising, ["--p", "x"]) == {:error, :usage}
+        end)
 
       assert output =~ "--p: boom"
     end
 
     test "a raising :validate yields a clean usage error, not a crash" do
       output =
-        capture_io(fn -> assert Cheer.run(TestRaising, ["--v", "x"]) == {:error, :usage} end)
+        capture_io(:stderr, fn ->
+          assert Cheer.run(TestRaising, ["--v", "x"]) == {:error, :usage}
+        end)
 
       assert output =~ "argh"
     end
@@ -3632,7 +3662,7 @@ defmodule CheerTest do
     test ":choices validates the post-parse value" do
       assert {:ok, %{m: "READ"}} = Cheer.run(TestParseInteractions, ["--m", "read"])
 
-      output = capture_io(fn -> Cheer.run(TestParseInteractions, ["--m", "nope"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestParseInteractions, ["--m", "nope"]) end)
       assert output =~ "must be one of"
     end
 
@@ -3641,7 +3671,9 @@ defmodule CheerTest do
     end
 
     test ":parse halts on the first failing element of a list" do
-      output = capture_io(fn -> Cheer.run(TestParseInteractions, ["--ids", "ok,bad,also"]) end)
+      output =
+        capture_io(:stderr, fn -> Cheer.run(TestParseInteractions, ["--ids", "ok,bad,also"]) end)
+
       assert output =~ "--ids: no bad"
     end
   end
@@ -3778,7 +3810,7 @@ defmodule CheerTest do
     end
 
     test "too few tokens for a range is a usage error" do
-      output = capture_io(fn -> Cheer.run(TestPositionalRange, []) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestPositionalRange, []) end)
       assert output =~ "<files> expects between 1 and 3 values, got 0"
     end
 
@@ -3787,7 +3819,7 @@ defmodule CheerTest do
     end
 
     test "an exact count with the wrong number is a usage error" do
-      output = capture_io(fn -> Cheer.run(TestPositionalExact, ["1"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestPositionalExact, ["1"]) end)
       assert output =~ "<point> expects 2 value(s), got 1"
     end
 
@@ -3797,7 +3829,7 @@ defmodule CheerTest do
     end
 
     test "the variadic argument still enforces its minimum after a fixed one" do
-      output = capture_io(fn -> Cheer.run(TestPositionalMixed, ["go"]) end)
+      output = capture_io(:stderr, fn -> Cheer.run(TestPositionalMixed, ["go"]) end)
       assert output =~ "<extra> expects between 1 and 2 values, got 0"
     end
   end
@@ -4097,7 +4129,7 @@ defmodule CheerTest do
 
     test "returns {:error, :usage} for an unknown option" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           assert Cheer.parse(TestParseRoot, ["serve", "--nope"]) == {:error, :usage}
         end)
 
@@ -4106,14 +4138,16 @@ defmodule CheerTest do
 
     test "returns {:error, :usage} for an unknown subcommand" do
       output =
-        capture_io(fn -> assert Cheer.parse(TestParseRoot, ["nope"]) == {:error, :usage} end)
+        capture_io(:stderr, fn ->
+          assert Cheer.parse(TestParseRoot, ["nope"]) == {:error, :usage}
+        end)
 
       assert output =~ "error: unknown command 'nope'"
     end
 
     test "returns {:error, :usage} when validation fails" do
       output =
-        capture_io(fn ->
+        capture_io(:stderr, fn ->
           assert Cheer.parse(TestParseServe, ["--transport", "carrier-pigeon"]) ==
                    {:error, :usage}
         end)
@@ -4123,7 +4157,9 @@ defmodule CheerTest do
 
     test "returns {:error, :usage} when a required subcommand is missing" do
       output =
-        capture_io(fn -> assert Cheer.parse(TestParseRequired, []) == {:error, :usage} end)
+        capture_io(:stderr, fn ->
+          assert Cheer.parse(TestParseRequired, []) == {:error, :usage}
+        end)
 
       assert output =~ "error: a subcommand is required"
     end
