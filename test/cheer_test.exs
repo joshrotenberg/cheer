@@ -2053,6 +2053,98 @@ defmodule CheerTest do
     end
   end
 
+  # -- Option forms before the subcommand name (#160) -------------------------
+
+  defmodule TestLeadingOptsRoot do
+    use Cheer.Command
+
+    command "app" do
+      about("App with several global option types")
+      version("9.9.9")
+
+      option(:verbose, type: :boolean, short: :v, global: true, help: "Verbose output")
+      option(:quiet, type: :boolean, short: :q, global: true, help: "Quiet output")
+      option(:level, type: :count, short: :l, global: true, help: "Log level")
+      option(:local, type: :string, help: "Root-only option")
+
+      subcommand(CheerTest.TestGlobalChild)
+    end
+  end
+
+  describe "option forms before the subcommand name" do
+    test "combined short booleans" do
+      assert {:ok, %{verbose: true, quiet: true, target: "prod"}} =
+               Cheer.run(TestLeadingOptsRoot, ["-vq", "deploy", "--target", "prod"])
+    end
+
+    test "repeated count flag" do
+      assert {:ok, %{level: 3, target: "prod"}} =
+               Cheer.run(TestLeadingOptsRoot, ["-lll", "deploy", "--target", "prod"])
+    end
+
+    test "count and boolean combined" do
+      assert {:ok, %{level: 2, verbose: true, target: "prod"}} =
+               Cheer.run(TestLeadingOptsRoot, ["-llv", "deploy", "--target", "prod"])
+    end
+
+    test "unknown option is a usage error" do
+      output =
+        capture_io(fn ->
+          assert {:error, :usage} =
+                   Cheer.run(TestLeadingOptsRoot, ["--bogus", "deploy", "--target", "prod"])
+        end)
+
+      assert output =~ "unknown option(s): --bogus"
+    end
+
+    test "non-global root option is a usage error" do
+      output =
+        capture_io(fn ->
+          assert {:error, :usage} =
+                   Cheer.run(TestLeadingOptsRoot, ["--local", "x", "deploy", "--target", "prod"])
+        end)
+
+      assert output =~ "--local"
+      assert output =~ "deploy"
+    end
+
+    test "options with no subcommand are a usage error" do
+      output =
+        capture_io(fn ->
+          assert {:error, :usage} = Cheer.run(TestLeadingOptsRoot, ["-v"])
+        end)
+
+      assert output =~ "error:"
+    end
+
+    test "unknown option with no subcommand is a usage error" do
+      output =
+        capture_io(fn ->
+          assert {:error, :usage} = Cheer.run(TestLeadingOptsRoot, ["--bogus"])
+        end)
+
+      assert output =~ "unknown option(s): --bogus"
+    end
+
+    test "help and version flags still work at the root" do
+      for argv <- [["--help"], ["-h"], ["-v", "--help"]] do
+        output = capture_io(fn -> assert :ok = Cheer.run(TestLeadingOptsRoot, argv) end)
+        assert output =~ "Usage: app", "help for #{inspect(argv)}"
+        refute output =~ "error:", "no error for #{inspect(argv)}"
+      end
+
+      for argv <- [["-V"], ["--version"], ["-v", "-V"]] do
+        output = capture_io(fn -> assert :ok = Cheer.run(TestLeadingOptsRoot, argv) end)
+        assert output =~ "9.9.9", "version for #{inspect(argv)}"
+      end
+    end
+
+    test "empty argv still prints help with no error" do
+      output = capture_io(fn -> assert :ok = Cheer.run(TestLeadingOptsRoot, []) end)
+      refute output =~ "error:"
+    end
+  end
+
   # -- subcommand_required (#21) -----------------------------------------------
 
   defmodule TestSubRequired do
