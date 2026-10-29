@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.3](https://github.com/joshrotenberg/cheer/compare/v0.2.2...v0.2.3) (2026-10-29)
+
+
+### Features
+
+* export locals_without_parens for the DSL ([#150](https://github.com/joshrotenberg/cheer/issues/150)) ([d0df19a](https://github.com/joshrotenberg/cheer/commit/d0df19a7421f23e00220ac5e7814c801bc1c2157))
+
+
+### Bug Fixes
+
+* accept global options before the subcommand name ([#154](https://github.com/joshrotenberg/cheer/issues/154)) ([c5d3951](https://github.com/joshrotenberg/cheer/commit/c5d395109188eacc7b026b86d145b69f9b594c4f)), closes [#151](https://github.com/joshrotenberg/cheer/issues/151)
+
 ## [0.2.2](https://github.com/joshrotenberg/cheer/compare/v0.2.1...v0.2.2) (2026-07-26)
 
 
