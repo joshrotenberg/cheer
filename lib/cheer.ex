@@ -42,27 +42,37 @@ defmodule Cheer do
 
   Options:
     * `:prog` - program name for usage lines (default: derived from root command name)
+    * `:errors` - `:print` (default) prints usage diagnostics; `:return` suppresses
+      diagnostics, including deprecation warnings, and returns a `Cheer.UsageError`.
+      Any other value raises `ArgumentError`; accepted values are `:print` and `:return`.
 
   ## Return value
 
     * On success, returns whatever the matched command's `run/2` returns.
     * On a usage failure (unknown option, missing required argument, bad choice,
       unknown or ambiguous subcommand, missing required subcommand), prints the
-      error and returns `{:error, :usage}`.
+      error and returns `{:error, :usage}` by default. With `errors: :return`,
+      returns `{:error, %Cheer.UsageError{}}` without printing errors, help, or
+      suggestions. When several failures are found, returns the first kind.
     * For `--help` / `--version` (and a bare command that just prints help),
-      returns `:ok`.
+      prints to stdout and returns `:ok` in either error mode.
 
-  Use the `{:error, :usage}` result to set a nonzero exit code, or call
+  Use `exit_code/1` to map either usage error result to a nonzero exit code, or call
   `main/3` to have Cheer halt with a conventional code for you.
 
   Pass `Cheer.argv/0` rather than `System.argv/0` if the app also ships as a
   Burrito binary. Use `parse/3` instead if argv configures a process that keeps
   running rather than driving a unit of work.
   """
-  @spec run(module(), [String.t()], keyword()) :: term() | {:error, :usage}
+  @spec run(module(), [String.t()], keyword()) ::
+          term() | {:error, :usage | Cheer.UsageError.t()}
   def run(root_command, argv, opts \\ []) do
     prog = Keyword.get(opts, :prog)
-    Cheer.Router.dispatch(root_command, argv, prog: prog)
+
+    Cheer.Router.dispatch(root_command, argv,
+      prog: prog,
+      errors: errors_mode!(opts)
+    )
   end
 
   @doc """
@@ -74,14 +84,21 @@ defmodule Cheer do
 
   Options:
     * `:prog` - program name for usage lines (default: derived from root command name)
+    * `:errors` - `:print` (default) prints usage diagnostics; `:return` suppresses
+      diagnostics, including deprecation warnings, and returns a `Cheer.UsageError`.
+      Any other value raises `ArgumentError`; accepted values are `:print` and `:return`.
 
   ## Return value
 
     * `{:ok, command_module, args}` on a successful parse. `args` is the map
       `run/2` would have received.
     * `:handled` when Cheer printed help or a version and there is nothing left
-      to run.
-    * `{:error, :usage}` on a parse failure, error already printed.
+      to run. Help and version requests print to stdout in either error mode.
+    * `{:error, :usage}` on a parse failure in the default `errors: :print` mode,
+      error already printed.
+    * `{:error, %Cheer.UsageError{}}` on a parse failure with `errors: :return`,
+      without printing errors, help, or suggestions. When several failures are
+      found, returns the first kind.
 
   `:handled` is distinct from `:ok` on purpose: a caller can tell "Cheer printed
   help" from a handler that legitimately returned `:ok`.
@@ -111,10 +128,15 @@ defmodule Cheer do
   asking for one.
   """
   @spec parse(module(), [String.t()], keyword()) ::
-          {:ok, module(), map()} | :handled | {:error, :usage}
+          {:ok, module(), map()} | :handled | {:error, :usage | Cheer.UsageError.t()}
   def parse(root_command, argv, opts \\ []) do
     prog = Keyword.get(opts, :prog)
-    Cheer.Router.dispatch(root_command, argv, prog: prog, mode: :parse)
+
+    Cheer.Router.dispatch(root_command, argv,
+      prog: prog,
+      mode: :parse,
+      errors: errors_mode!(opts)
+    )
   end
 
   @doc """
@@ -158,8 +180,9 @@ defmodule Cheer do
   @doc """
   Map a `run/3` or `parse/3` result to a conventional process exit code.
 
-  Returns `2` for `{:error, :usage}` and `0` for anything else, which is the
-  mapping `main/3` applies. Call it directly when a command wants exit codes of
+  Returns `2` for `{:error, :usage}` or `{:error, %Cheer.UsageError{}}` and `0`
+  for anything else, which is the mapping `main/3` applies. Call it directly
+  when a command wants exit codes of
   its own and so has to halt itself, rather than restating the convention:
 
       case Cheer.run(MyApp.CLI, argv, prog: "myapp") do
@@ -169,8 +192,9 @@ defmodule Cheer do
 
   Pure, unlike `main/3`, which halts.
   """
-  @spec exit_code(term()) :: 0 | 2
+  @spec exit_code({:error, :usage | Cheer.UsageError.t()} | term()) :: 0 | 2
   def exit_code({:error, :usage}), do: 2
+  def exit_code({:error, %Cheer.UsageError{}}), do: 2
   def exit_code(_), do: 0
 
   @doc """
@@ -225,6 +249,16 @@ defmodule Cheer do
         |> Enum.reject(fn sub -> Map.get(sub.__cheer_meta__(), :hide, false) end)
         |> Enum.map(&tree/1)
     }
+  end
+
+  defp errors_mode!(opts) do
+    case Keyword.get(opts, :errors, :print) do
+      mode when mode in [:print, :return] ->
+        mode
+
+      other ->
+        raise ArgumentError, "expected :errors to be :print or :return, got: #{inspect(other)}"
+    end
   end
 
   defp hidden?({_name, opts}), do: Keyword.get(opts, :hide, false)
