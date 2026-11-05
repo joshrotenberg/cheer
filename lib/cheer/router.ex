@@ -95,15 +95,15 @@ defmodule Cheer.Router do
       first_is_subcommand ->
         dispatch_command(command, meta, argv, Keyword.put(opts, :parent_hooks, hooks), hooks)
 
-      flag_requested?(argv, ["--help"]) ->
+      flag_requested?(argv, ["--help"], meta, opts) ->
         Cheer.Help.print(command, Keyword.put(opts, :long, true))
         printed(opts)
 
-      flag_requested?(argv, ["-h"]) ->
+      flag_requested?(argv, ["-h"], meta, opts) ->
         Cheer.Help.print(command, opts)
         printed(opts)
 
-      flag_requested?(argv, ["--version", "-V"]) ->
+      flag_requested?(argv, ["--version", "-V"], meta, opts) ->
         print_version(meta)
         printed(opts)
 
@@ -1476,13 +1476,68 @@ defmodule Cheer.Router do
 
   # -- Help / version detection --
 
-  # True if one of `targets` appears before a `--` terminator. Everything after
-  # `--` is a literal positional, so `tool -- --help` treats --help as an arg
-  # rather than a help request (matching conventional CLI behavior).
-  defp flag_requested?(argv, targets) do
-    argv
-    |> Enum.take_while(&(&1 != "--"))
-    |> Enum.any?(&(&1 in targets))
+  # Routing resolves the subcommand before checking flags, so use the same
+  # local options and inherited globals that will parse this argv. Required
+  # value positions cannot request help, even when the value is invalid.
+  defp flag_requested?(argv, targets, meta, opts) do
+    inherited_globals =
+      Enum.reject(Keyword.get(opts, :parent_globals, []), fn {name, _} ->
+        List.keymember?(meta.options, name, 0)
+      end)
+
+    lookup = num_args_lookup(meta.options ++ inherited_globals)
+    do_flag_requested?(argv, targets, lookup, Map.get(meta, :external_subcommands, false))
+  end
+
+  defp do_flag_requested?([], _targets, _lookup, _head?), do: false
+  defp do_flag_requested?(["--" | _], _targets, _lookup, _head?), do: false
+
+  defp do_flag_requested?([token | rest], targets, lookup, head?) do
+    if token in targets do
+      true
+    else
+      rest =
+        case num_args_flag(token, lookup) do
+          {{_name, option_opts}, nil} -> skip_flag_values(rest, option_opts)
+          _ -> rest
+        end
+
+      # External subcommands own everything after their name. Preserve builtin
+      # flag detection there without applying the parent's option declarations.
+      lookup = if head? and not String.starts_with?(token, "-"), do: %{}, else: lookup
+      do_flag_requested?(rest, targets, lookup, head?)
+    end
+  end
+
+  defp skip_flag_values(argv, opts) do
+    cond do
+      Keyword.has_key?(opts, :num_args) ->
+        {min, max} = num_args_bounds(Keyword.fetch!(opts, :num_args))
+        {_required, rest} = take_num_args_values(argv, min, [], true)
+
+        # Once the minimum is satisfied, flag-looking tokens end optional
+        # values unless the option explicitly accepts hyphen values.
+        {_optional, rest} =
+          take_num_args_values(
+            rest,
+            max - min,
+            [],
+            Keyword.get(opts, :allow_hyphen_values, false)
+          )
+
+        rest
+
+      parser_type(opts) in [:boolean, :count] ->
+        argv
+
+      Keyword.has_key?(opts, :default_missing_value) and
+          not Keyword.get(opts, :allow_hyphen_values, false) ->
+        argv
+
+      true ->
+        {_value, rest} = take_num_args_values(argv, 1, [], true)
+        rest
+    end
   end
 
   # -- Deprecation warnings --
