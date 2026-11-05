@@ -1140,7 +1140,7 @@ defmodule Cheer.Router do
       {{name, opts}, nil} ->
         case rest do
           [value | rest2] ->
-            collected = Map.put(collected, name, coerce_arg(value, opts))
+            collected = collect_hyphen_value(collected, name, value, opts)
             do_extract_hyphen_values(rest2, lookup, collected, residual, head?)
 
           [] ->
@@ -1149,7 +1149,7 @@ defmodule Cheer.Router do
         end
 
       {{name, opts}, inline} ->
-        collected = Map.put(collected, name, coerce_arg(inline, opts))
+        collected = collect_hyphen_value(collected, name, inline, opts)
         do_extract_hyphen_values(rest, lookup, collected, residual, head?)
 
       :nomatch ->
@@ -1159,6 +1159,16 @@ defmodule Cheer.Router do
         else
           do_extract_hyphen_values(rest, lookup, collected, [token | residual], head?)
         end
+    end
+  end
+
+  defp collect_hyphen_value(collected, name, raw, opts) do
+    value = coerce_arg(raw, opts)
+
+    if Keyword.get(opts, :multi, false) do
+      Map.update(collected, name, [value], &(&1 ++ [value]))
+    else
+      Map.put(collected, name, value)
     end
   end
 
