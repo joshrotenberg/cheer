@@ -44,6 +44,7 @@ defmodule Cheer do
     * `:prog` - program name for usage lines (default: derived from root command name)
     * `:errors` - `:print` (default) prints usage diagnostics; `:return` suppresses
       diagnostics, including deprecation warnings, and returns a `Cheer.UsageError`.
+      Any other value raises `ArgumentError`; accepted values are `:print` and `:return`.
 
   ## Return value
 
@@ -70,7 +71,7 @@ defmodule Cheer do
 
     Cheer.Router.dispatch(root_command, argv,
       prog: prog,
-      errors: Keyword.get(opts, :errors, :print)
+      errors: errors_mode!(opts)
     )
   end
 
@@ -85,6 +86,7 @@ defmodule Cheer do
     * `:prog` - program name for usage lines (default: derived from root command name)
     * `:errors` - `:print` (default) prints usage diagnostics; `:return` suppresses
       diagnostics, including deprecation warnings, and returns a `Cheer.UsageError`.
+      Any other value raises `ArgumentError`; accepted values are `:print` and `:return`.
 
   ## Return value
 
@@ -133,7 +135,7 @@ defmodule Cheer do
     Cheer.Router.dispatch(root_command, argv,
       prog: prog,
       mode: :parse,
-      errors: Keyword.get(opts, :errors, :print)
+      errors: errors_mode!(opts)
     )
   end
 
@@ -247,6 +249,16 @@ defmodule Cheer do
         |> Enum.reject(fn sub -> Map.get(sub.__cheer_meta__(), :hide, false) end)
         |> Enum.map(&tree/1)
     }
+  end
+
+  defp errors_mode!(opts) do
+    case Keyword.get(opts, :errors, :print) do
+      mode when mode in [:print, :return] ->
+        mode
+
+      other ->
+        raise ArgumentError, "expected :errors to be :print or :return, got: #{inspect(other)}"
+    end
   end
 
   defp hidden?({_name, opts}), do: Keyword.get(opts, :hide, false)

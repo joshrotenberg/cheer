@@ -123,7 +123,7 @@ defmodule Cheer.UsageErrorTest do
     {result, stdout, stderr}
   end
 
-  defp assert_usage_error(command, argv, kind, names) do
+  defp assert_usage_error(command, argv, kind, names, expected_message \\ nil) do
     for entrypoint <- [:parse, :run] do
       {result, stdout, stderr} =
         streams(fn -> apply(Cheer, entrypoint, [command, argv, [errors: :return]]) end)
@@ -131,6 +131,7 @@ defmodule Cheer.UsageErrorTest do
       assert {:error, %UsageError{kind: ^kind, names: ^names, message: message}} = result
       assert is_binary(message) and message != ""
       refute message =~ "\e["
+      if expected_message, do: assert(message == expected_message)
       assert stdout == ""
       assert stderr == ""
     end
@@ -156,8 +157,39 @@ defmodule Cheer.UsageErrorTest do
     assert_usage_error(Leaf, ["--no-verbose=wrong"], :invalid_value, [:verbose])
   end
 
-  test "an option with a missing value retains the unknown option classification" do
-    assert_usage_error(Leaf, ["--wait-ms"], :unknown_option, ["--wait-ms"])
+  test "missing option values and aliases identify the declared option" do
+    for flag <- ["--wait-ms", "-w", "--delay"] do
+      assert_usage_error(Leaf, [flag], :invalid_value, [:wait_ms], "missing value for --wait-ms")
+    end
+  end
+
+  test "invalid values deduplicate the declared name across aliases" do
+    assert_usage_error(Leaf, ["--wait-ms", "a", "-w", "b"], :invalid_value, [:wait_ms])
+  end
+
+  test "invalid value names preserve first occurrence order across aliases" do
+    assert_usage_error(
+      Leaf,
+      ["--port", "bad", "--wait-ms", "a", "-w", "b", "--port", "wrong"],
+      :invalid_value,
+      [:port, :wait_ms]
+    )
+
+    assert_usage_error(
+      Leaf,
+      ["--wait-ms", "a", "--port", "bad", "-w", "b"],
+      :invalid_value,
+      [:wait_ms, :port]
+    )
+  end
+
+  test "unknown option names are unique and preserve first occurrence order" do
+    assert_usage_error(
+      Leaf,
+      ["--bogus", "--nope", "--bogus"],
+      :unknown_option,
+      ["--bogus", "--nope"]
+    )
   end
 
   test "missing required arguments and options return declared names" do
@@ -298,6 +330,39 @@ defmodule Cheer.UsageErrorTest do
       assert stderr =~ "integer"
       assert stderr =~ "Usage:"
       refute stderr =~ "unknown option"
+    end
+  end
+
+  test "print mode reports missing values without calling the option unknown" do
+    for opts <- [[], [errors: :print]],
+        entrypoint <- [:parse, :run],
+        flag <- ["--wait-ms", "-w", "--delay"] do
+      {result, stdout, stderr} =
+        streams(fn -> apply(Cheer, entrypoint, [Leaf, [flag], opts]) end)
+
+      assert result == {:error, :usage}
+      assert stdout == ""
+      assert stderr =~ "missing value for --wait-ms"
+      assert stderr =~ "Usage:"
+      refute stderr =~ "unknown option"
+    end
+  end
+
+  test "invalid errors options raise before any output including requested help" do
+    for entrypoint <- [:parse, :run],
+        errors <- [:invalid, nil, "return"],
+        argv <- [[], ["--help"]] do
+      {error, stdout, stderr} =
+        streams(fn ->
+          assert_raise ArgumentError, fn ->
+            apply(Cheer, entrypoint, [Leaf, argv, [errors: errors]])
+          end
+        end)
+
+      assert error.message =~ ":print"
+      assert error.message =~ ":return"
+      assert stdout == ""
+      assert stderr == ""
     end
   end
 

@@ -1653,7 +1653,7 @@ defmodule Cheer.Router do
             :invalid_value -> Enum.map_join(group, "; ", & &1.message)
           end
 
-        %{error | names: names, message: message}
+        %{error | names: Enum.uniq(names), message: message}
       end)
 
     usage_error(error, opts, fn ->
@@ -1666,7 +1666,14 @@ defmodule Cheer.Router do
 
   defp invalid_option_error({flag, value}, lookup) do
     case {value, invalid_option_definition(flag, lookup)} do
-      {value, {name, option_opts}} when not is_nil(value) ->
+      {nil, {name, _option_opts}} ->
+        %Cheer.UsageError{
+          kind: :invalid_value,
+          names: [name],
+          message: "missing value for --#{flag_string(name)}"
+        }
+
+      {value, {name, option_opts}} ->
         %Cheer.UsageError{
           kind: :invalid_value,
           names: [name],
@@ -1703,8 +1710,6 @@ defmodule Cheer.Router do
     candidates = option_name_candidates(all_options)
 
     Enum.each(invalid, fn flag ->
-      # A known option missing a value is also reported here. Do not suggest
-      # the flag the user already typed.
       with "--" <> name <- flag,
            suggestion when not is_nil(suggestion) <- suggest(name, candidates -- [name]) do
         IO.puts(error_device(), "\n  Did you mean '--#{suggestion}'?")
