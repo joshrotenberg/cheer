@@ -503,7 +503,7 @@ defmodule CheerTest do
 
     test "a known option given a bad value does not suggest itself" do
       out = capture_io(:stderr, fn -> Cheer.run(TestSuggest, ["--port", "abc"]) end)
-      assert out =~ "unknown option(s): --port"
+      assert out =~ "invalid value for --port: expected integer"
       refute out =~ "Did you mean"
     end
   end
