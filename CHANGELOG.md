@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.0](https://github.com/joshrotenberg/cheer/compare/v0.2.3...v0.3.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* a subcommand whose argument shares a name with an inherited global option raises ArgumentError when dispatched. It ran, and the global option's value was silently dropped.
+* usage errors are written to stderr instead of stdout, and Cheer.Test.run/3 reports them in error_output rather than output. Tests that assert on error text through result.output need to read result.error_output.
+* a command with subcommands that is given options but no subcommand (`mytool --verbose`) now prints an error and exits 2. It printed help and exited 0. An unknown option before the subcommand name, or the parent's own non-global option, is also an error with exit 2. Running with no arguments still prints help and exits 0.
+
+### Features
+
+* return usage errors as data without printing ([#171](https://github.com/joshrotenberg/cheer/issues/171)) ([65af620](https://github.com/joshrotenberg/cheer/commit/65af620605e88570084619c8014fe70b8e7b5e54))
+
+
+### Bug Fixes
+
+* detect arguments and options that share a name ([#166](https://github.com/joshrotenberg/cheer/issues/166)) ([2eb2ed8](https://github.com/joshrotenberg/cheer/commit/2eb2ed83b3ded186338c55656215d04504f999b1))
+* do not treat option values as help or version flags ([#174](https://github.com/joshrotenberg/cheer/issues/174)) ([e0edda5](https://github.com/joshrotenberg/cheer/commit/e0edda546a4927423fb3132dfbd6ac4e0537f490))
+* give Cheer.Test.run/3 a private error device ([#169](https://github.com/joshrotenberg/cheer/issues/169)) ([c3565ed](https://github.com/joshrotenberg/cheer/commit/c3565edd010a70efe9779a95d754ebc9ed890dbc)), closes [#168](https://github.com/joshrotenberg/cheer/issues/168)
+* **help:** skip a suffix marker already present in the help string ([#178](https://github.com/joshrotenberg/cheer/issues/178)) ([a365a54](https://github.com/joshrotenberg/cheer/commit/a365a5432a106474a64b7d4f46810a56039e3878)), closes [#177](https://github.com/joshrotenberg/cheer/issues/177)
+* keep every occurrence of a multi option with hyphen values ([#176](https://github.com/joshrotenberg/cheer/issues/176)) ([4f2621d](https://github.com/joshrotenberg/cheer/commit/4f2621de3c3f4aa53a3c284de489804466007976))
+* parse every option form before the subcommand name ([#161](https://github.com/joshrotenberg/cheer/issues/161)) ([d0b4a9b](https://github.com/joshrotenberg/cheer/commit/d0b4a9bbd2e5e4a8687b4711db6a9d21cf40c7d7)), closes [#160](https://github.com/joshrotenberg/cheer/issues/160)
+* type-check positional and multi-value parameters ([#179](https://github.com/joshrotenberg/cheer/issues/179)) ([4d5a6b8](https://github.com/joshrotenberg/cheer/commit/4d5a6b8327f283e267d427d178b704063a89f491)), closes [#172](https://github.com/joshrotenberg/cheer/issues/172)
+* write usage errors to stderr ([#164](https://github.com/joshrotenberg/cheer/issues/164)) ([1b99cb3](https://github.com/joshrotenberg/cheer/commit/1b99cb3d1412ddf6968e5278d1208c6c71175a60))
+
 ## [0.2.3](https://github.com/joshrotenberg/cheer/compare/v0.2.2...v0.2.3) (2026-10-29)
 
 
