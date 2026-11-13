@@ -273,7 +273,11 @@ defmodule Cheer.Command.DSL do
       each element.
     * `:env` - environment variable name to read as fallback
     * `:choices` - list of allowed values
-    * `:help` - help text shown in `--help`
+    * `:help` - help text shown in `--help`. Help appends markers derived from
+      the other settings, so they need not be written by hand: `[choices: ...]`,
+      `[default: ...]`, `[env: ...]`, `(repeatable)` for `:count`, `(multiple)`
+      for `:multi`, `(global)`, `(N values)` for `:num_args`, and `(deprecated)`.
+      A marker already present in the help text is not appended again.
     * `:long_help` - extended help text shown by `--help` (long form)
     * `:value_name` - placeholder name in help (e.g. `"FILE"`)
     * `:hide` - `true` to hide from help output
