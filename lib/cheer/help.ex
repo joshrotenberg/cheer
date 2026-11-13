@@ -366,6 +366,11 @@ defmodule Cheer.Help do
 
     suffixes = suffixes ++ deprecated_label(Keyword.get(opt_opts, :deprecated))
 
+    # An author may already have written a marker into the help text ("More
+    # output (repeatable)"); appending it again would print it twice (#177).
+    help_text = help |> to_string() |> String.downcase()
+    suffixes = Enum.reject(suffixes, &String.contains?(help_text, String.downcase(&1)))
+
     suffix = if suffixes != [], do: " " <> Enum.join(suffixes, " "), else: ""
 
     flag_col =

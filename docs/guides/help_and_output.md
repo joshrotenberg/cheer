@@ -77,6 +77,25 @@ Within any section, items without a `:display_order` fall back to
 declaration order. Stable sort, so mixing explicit and implicit ordering is
 predictable.
 
+## Markers appended to option help
+
+Help derives markers from an option's settings and appends them to its help
+text, so the help string does not need to state them:
+
+| Setting | Marker |
+| --- | --- |
+| `:choices` | `[choices: a, b]` |
+| `:default` | `[default: value]` |
+| `:env` | `[env: NAME]` |
+| `type: :count` | `(repeatable)` |
+| `multi: true` | `(multiple)` |
+| `global: true` | `(global)` |
+| `:num_args` | `(2 values)`, `(1..3 values)` |
+| `:deprecated` | `(deprecated)`, `(deprecated: reason)` |
+
+A marker that the help text already contains, compared without regard to case,
+is not appended a second time.
+
 ## Hiding from help
 
 Hide an individual option or argument with `hide: true`:

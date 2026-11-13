@@ -1485,6 +1485,21 @@ defmodule CheerTest do
     def run(args, _raw), do: {:ok, args}
   end
 
+  defmodule TestHelpMarkers do
+    use Cheer.Command
+
+    command "markers" do
+      option(:verbose, type: :count, short: :v, help: "More output (repeatable)")
+      option(:quiet, type: :count, short: :q, help: "Less output")
+      option(:loud, type: :count, help: "More noise (Repeatable)")
+      option(:tag, type: :string, multi: true, help: "Tag (repeatable)")
+      option(:level, type: :integer, default: 3, help: "Level [default: 3]")
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
   defmodule TestCountEnv do
     use Cheer.Command
 
@@ -1520,6 +1535,16 @@ defmodule CheerTest do
     test "help text shows repeatable" do
       output = capture_io(fn -> Cheer.run(TestCount, ["--help"]) end)
       assert output =~ "(repeatable)"
+    end
+
+    test "help text does not repeat a marker the help string already has (#177)" do
+      output = capture_io(fn -> Cheer.run(CheerTest.TestHelpMarkers, ["--help"]) end)
+
+      assert output =~ ~r/--verbose\s+More output \(repeatable\)\n/
+      assert output =~ ~r/--quiet\s+Less output \(repeatable\)\n/
+      assert output =~ ~r/--loud\s+More noise \(Repeatable\)\n/
+      assert output =~ ~r/--tag\s+Tag \(repeatable\) \(multiple\)\n/
+      assert output =~ ~r/--level\s+Level \[default: 3\]\n/
     end
 
     test "env fallback coerces to an integer (#67)" do
