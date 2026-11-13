@@ -193,7 +193,8 @@ defmodule Cheer.Command.DSL do
 
   Arguments are matched in declaration order. Options:
 
-    * `:type` - `:string` (default), `:integer`, `:float`, or `:boolean`
+    * `:type` - `:string` (default), `:integer`, `:float`, or `:boolean`. A value that
+      does not parse as `:integer` or `:float` is a usage error
     * `:required` - `true` or `false` (default)
     * `:num_args` - collect several positional tokens into a list: an integer for
       an exact count or a range (`1..3`) for a variable count. Consumption is

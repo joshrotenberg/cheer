@@ -978,8 +978,13 @@ defmodule CheerTest do
       assert {:ok, %{ratio: 1.5}} = Cheer.run(TestFloatBoolArgs, ["1.5", "true"])
     end
 
-    test "an unparseable float argument stays a string" do
-      assert {:ok, %{ratio: "abc"}} = Cheer.run(TestFloatBoolArgs, ["abc", "true"])
+    test "an unparseable float argument is a usage error (#172)" do
+      output =
+        capture_io(:stderr, fn ->
+          assert {:error, :usage} = Cheer.run(TestFloatBoolArgs, ["abc", "true"])
+        end)
+
+      assert output =~ ~s(invalid value for <ratio>: expected float, got "abc")
     end
 
     test "boolean argument coerces truthy and falsy strings" do

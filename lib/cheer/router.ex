@@ -400,6 +400,9 @@ defmodule Cheer.Router do
         pos_error = positional_count_error(meta.arguments, positional_map) ->
           usage_error(pos_error, opts)
 
+        type_error = type_error(args, all_options, meta.arguments, provided) ->
+          usage_error(type_error, opts, fn -> print_error_help(command, opts) end)
+
         true ->
           arg_names = MapSet.new(meta.arguments, fn {n, _} -> n end)
 
@@ -476,6 +479,9 @@ defmodule Cheer.Router do
       cond do
         missing != [] ->
           missing_args_error(command, missing, opts)
+
+        type_error = type_error(args, all_options, [], provided) ->
+          usage_error(type_error, opts, fn -> print_error_help(command, opts) end)
 
         true ->
           arg_names = MapSet.new(meta.arguments, fn {n, _} -> n end)
@@ -980,6 +986,39 @@ defmodule Cheer.Router do
       _ ->
         value
     end
+  end
+
+  # coerce_arg/2 hands back the raw string when it does not parse as the declared
+  # type, so a string left in an :integer or :float parameter is a value the
+  # user got wrong (#172). Only supplied names are checked: a default, an env
+  # fallback, and a :default_missing_value are the author's, not user input.
+  # Returns the error for the first offending parameter, or nil.
+  defp type_error(args, options, arguments, provided) do
+    labelled =
+      Enum.map(options, fn {name, o} -> {name, o, "--#{flag_string(name)}"} end) ++
+        Enum.map(arguments, fn {name, o} -> {name, o, "<#{name}>"} end)
+
+    Enum.find_value(labelled, fn {name, opts, label} ->
+      type = Keyword.get(opts, :type, :string)
+
+      with true <- type in [:integer, :float] and MapSet.member?(provided, name),
+           {:ok, value} <- Map.fetch(args, name),
+           false <- missing_value?(value, opts),
+           bad when is_binary(bad) <- value |> List.wrap() |> Enum.find(&is_binary/1) do
+        %Cheer.UsageError{
+          kind: :invalid_value,
+          names: [name],
+          message: "invalid value for #{label}: expected #{type}, got #{inspect(bad)}"
+        }
+      else
+        _ -> nil
+      end
+    end)
+  end
+
+  defp missing_value?(value, opts) do
+    Keyword.has_key?(opts, :default_missing_value) and
+      value == Keyword.fetch!(opts, :default_missing_value)
   end
 
   # -- Subcommand matching --
