@@ -4,6 +4,9 @@ A minimal complete example. One command, one required argument, three options
 (including a typed one with a validator and an env var fallback).
 
 Full runnable project: [`examples/greeter/`](https://github.com/joshrotenberg/cheer/tree/main/examples/greeter).
+The same command is also there as a single-file script,
+[`greeter.exs`](https://github.com/joshrotenberg/cheer/blob/main/examples/greeter/greeter.exs);
+see [Run it as a script](#run-it-as-a-script).
 
 ## The command
 
@@ -81,6 +84,44 @@ Option defaults are evaluated at compile time, so a default computed from the
 build machine (a home directory, the current date) is fixed in the escript.
 See [Defaults and env var fallback](../guides/options.md#defaults-and-env-var-fallback).
 
+## Run it as a script
+
+The command needs no Mix project. Put the module in one `.exs` file, declare
+cheer with `Mix.install/2` above it, and call `Cheer.main/3` on the last line:
+
+```elixir
+#!/usr/bin/env elixir
+Mix.install([
+  {:cheer, "~> 0.3"}
+])
+
+defmodule Greeter.CLI do
+  use Cheer.Command
+
+  # The command block and run/2 from above, unchanged. main/1 is not needed.
+end
+
+Cheer.main(Greeter.CLI, System.argv(), prog: "greeter")
+```
+
+```sh
+chmod +x greeter.exs
+
+./greeter.exs world --loud --times 3
+# HELLO, WORLD!
+# HELLO, WORLD!
+# HELLO, WORLD!
+
+./greeter.exs --help
+# Usage: greeter <name> [OPTIONS]
+# ...
+```
+
+The first run fetches and compiles cheer; later runs reuse the `Mix.install`
+cache. `Cheer.main/3` halts the VM with exit code 0, or 2 on a usage error.
+[Script](script.md) covers the cache, formatting a lone script, and when a
+script fits better than an escript.
+
 ## What it shows
 
 - **Required positional** -- `argument :name, required: true` with the
@@ -99,3 +140,5 @@ See [Defaults and env var fallback](../guides/options.md#defaults-and-env-var-fa
   [Validation](../guides/validation.md).
 - Next cookbook: [Devtool](devtool.md) -- multi-command nesting with
   lifecycle hooks and groups.
+- Cookbook: [Script](script.md) -- a multi-command CLI with a second
+  dependency, as a `Mix.install` script.
