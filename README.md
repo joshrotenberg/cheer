@@ -65,7 +65,7 @@ Cheer.run(MyApp.CLI.Greet, ["world", "--loud"], prog: "greet")
 <!-- x-release-please-start-version -->
 ```elixir
 def deps do
-  [{:cheer, "~> 0.2.3"}]
+  [{:cheer, "~> 0.3.0"}]
 end
 ```
 <!-- x-release-please-end -->
@@ -109,8 +109,7 @@ Full docs on [hexdocs.pm/cheer](https://hexdocs.pm/cheer):
 Standalone Mix projects that match the cookbook entries live under
 [`examples/`](examples/):
 
-- [`examples/greeter/`](examples/greeter/) -- minimal single-command CLI. Also
-  as a single-file `Mix.install` script, [`greeter.exs`](examples/greeter/greeter.exs).
+- [`examples/greeter/`](examples/greeter/) -- minimal single-command CLI.
 - [`examples/devtool/`](examples/devtool/) -- nested multi-command CLI
   with lifecycle hooks and groups.
 - [`examples/mix_task/`](examples/mix_task/) -- a Cheer command driving a
@@ -121,10 +120,6 @@ Standalone Mix projects that match the cookbook entries live under
 ```sh
 cd examples/greeter && mix deps.get
 mix run -e 'Greeter.CLI.main(["world", "--loud", "--times", "3"])'
-```
-
-```sh
-./examples/greeter/greeter.exs world --loud --times 3
 ```
 
 ## License
