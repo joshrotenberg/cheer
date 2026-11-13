@@ -24,6 +24,16 @@ argument :enabled, type: :boolean
 argument :name,    type: :string   # default
 ```
 
+A value that does not parse as `:integer` or `:float` is a usage error:
+
+```
+error: invalid value for <port>: expected integer, got "http"
+```
+
+With `errors: :return` it is a `Cheer.UsageError` of kind `:invalid_value`
+naming the argument. `:boolean` reads `true`, `1`, and `yes` as `true` and
+anything else as `false`.
+
 ## Optional arguments
 
 Omit `required: true` to make an argument optional. Optional arguments must

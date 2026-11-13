@@ -108,6 +108,37 @@ defmodule Cheer.UsageErrorTest do
     end
   end
 
+  defmodule Typed do
+    use Cheer.Command
+
+    command "typed" do
+      option(:point, type: :integer, num_args: 2)
+      option(:offset, type: :integer, allow_hyphen_values: true)
+      option(:shift, type: :float, allow_hyphen_values: true, multi: true)
+      option(:jobs, type: :integer, default_missing_value: "auto")
+      option(:ids, type: :integer, value_delimiter: ",")
+      option(:retries, type: :integer, value_delimiter: ",", env: "CHEER_TYPED_RETRIES")
+      argument(:count, type: :integer)
+      argument(:sizes, type: :float, num_args: 0..2)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
+  defmodule TypedExternal do
+    use Cheer.Command
+
+    command "typed-external" do
+      external_subcommands(true)
+      option(:point, type: :integer, num_args: 2)
+      option(:offset, type: :integer, allow_hyphen_values: true)
+    end
+
+    @impl Cheer.Command
+    def run(args, _raw), do: {:ok, args}
+  end
+
   defp streams(fun) do
     caller = self()
     ref = make_ref()
@@ -306,6 +337,99 @@ defmodule Cheer.UsageErrorTest do
 
   test "usage failures through deprecated subcommands print no warning" do
     assert_usage_error(Branch, ["legacy"], :missing_required, [:input])
+  end
+
+  describe "typed values that bypass OptionParser (#172)" do
+    test "a positional argument rejects a badly typed value" do
+      assert_usage_error(
+        Typed,
+        ["x"],
+        :invalid_value,
+        [:count],
+        ~s(invalid value for <count>: expected integer, got "x")
+      )
+    end
+
+    test "a num_args positional rejects a badly typed element" do
+      assert_usage_error(
+        Typed,
+        ["1", "2.5", "big"],
+        :invalid_value,
+        [:sizes],
+        ~s(invalid value for <sizes>: expected float, got "big")
+      )
+    end
+
+    test "a num_args option rejects a badly typed element" do
+      assert_usage_error(
+        Typed,
+        ["--point", "1", "y"],
+        :invalid_value,
+        [:point],
+        ~s(invalid value for --point: expected integer, got "y")
+      )
+    end
+
+    test "an allow_hyphen_values option rejects a badly typed value" do
+      assert_usage_error(Typed, ["--offset", "-x"], :invalid_value, [:offset])
+      assert_usage_error(Typed, ["--offset=-x"], :invalid_value, [:offset])
+      assert_usage_error(Typed, ["--shift", "-1.5", "--shift", "-up"], :invalid_value, [:shift])
+    end
+
+    test "a default_missing_value option rejects a badly typed inline value" do
+      assert_usage_error(Typed, ["--jobs=many"], :invalid_value, [:jobs])
+    end
+
+    test "a value_delimiter option rejects a badly typed element" do
+      assert_usage_error(
+        Typed,
+        ["--ids", "1,z,3"],
+        :invalid_value,
+        [:ids],
+        ~s(invalid value for --ids: expected integer, got "z")
+      )
+    end
+
+    test "the external subcommand path rejects badly typed values" do
+      assert_usage_error(TypedExternal, ["--point", "1", "y", "plugin"], :invalid_value, [:point])
+      assert_usage_error(TypedExternal, ["--offset", "-x", "plugin"], :invalid_value, [:offset])
+    end
+
+    test "valid values parse as before" do
+      argv = ~w(--point 1 2 --offset -3 --shift -1.5 --shift 2 --jobs=4 --ids 1,2 7 1.5 2)
+
+      assert {:ok, Typed, args} = Cheer.parse(Typed, argv)
+
+      assert %{
+               point: [1, 2],
+               offset: -3,
+               shift: [-1.5, 2.0],
+               jobs: 4,
+               ids: [1, 2],
+               count: 7,
+               sizes: [1.5, 2.0]
+             } = args
+    end
+
+    test "a bare default_missing_value flag keeps the author's value" do
+      assert {:ok, Typed, %{jobs: "auto"}} = Cheer.parse(Typed, ["--jobs"])
+    end
+
+    test "an env fallback is not type-checked" do
+      System.put_env("CHEER_TYPED_RETRIES", "1,soon")
+      on_exit(fn -> System.delete_env("CHEER_TYPED_RETRIES") end)
+
+      assert {:ok, Typed, %{retries: [1, "soon"]}} = Cheer.parse(Typed, [])
+    end
+
+    test "the default mode prints the error and the command help" do
+      {result, stdout, stderr} = streams(fn -> Cheer.run(Typed, ["x"]) end)
+
+      assert result == {:error, :usage}
+      assert stdout == ""
+      assert stderr =~ ~s(error: invalid value for <count>: expected integer, got "x")
+      assert stderr =~ "Usage: typed"
+    end
   end
 
   test "return mode also leaves a private error device empty" do
